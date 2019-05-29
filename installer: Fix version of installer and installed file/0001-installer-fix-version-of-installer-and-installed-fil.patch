@@ -1,0 +1,74 @@
+From 08a74309130ccf34a0564a9c1e4fee719b4e9cbb Mon Sep 17 00:00:00 2001
+From: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
+Date: Wed, 6 Mar 2019 17:35:59 +0530
+Subject: [PATCH 1/1] installer: fix version of installer and installed file
+
+As reported by @JJClements, the File version and Product version of the
+installer and installer binary were not the same. They are set by the
+`installer/release.sh` and by using `sdk build (installer |
+git-and-installer)` commands, which created this discrepancy.
+
+Create two macros, `FILE_VERSION` and `PROD_VERSION` to store File and
+Product version of the included binary and copy it to the installer
+file.
+
+Closes: git-for-windows/git#1797
+Signed-off-by: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
+---
+ installer/install.iss | 19 +++++++++----------
+ 1 file changed, 9 insertions(+), 10 deletions(-)
+
+diff --git a/installer/install.iss b/installer/install.iss
+index 9c1b88d..a51e87f 100644
+--- a/installer/install.iss
++++ b/installer/install.iss
+@@ -38,11 +38,10 @@ OutputDir={#GetEnv('USERPROFILE')}
+ #endif
+ #endif
+ SolidCompression=yes
+-#ifdef SOURCE_DIR
+-SourceDir={#SOURCE_DIR}
+-#else
+-SourceDir={#SourcePath}\..\..\..\..
++#ifndef SOURCE_DIR
++#define SOURCE_DIR SourcePath+'\..\..\..\..'
+ #endif
++SourceDir={#SOURCE_DIR}
+ #if BITNESS=='64'
+ ArchitecturesInstallIn64BitMode=x64
+ #endif
+@@ -50,13 +49,17 @@ ArchitecturesInstallIn64BitMode=x64
+ SignTool=signtool
+ #endif
+ 
++#define FILE_VERSION GetFileVersion(SOURCE_DIR+'\'+MINGW_BITNESS+'\bin\git.exe')
++#define PROD_VERSION GetStringFileInfo(SOURCE_DIR+'\'+MINGW_BITNESS \
++				+'\bin\git.exe', 'ProductVersion')
++
+ ; Installer-related
+ AllowNoIcons=yes
+ AppName={#APP_NAME}
+ AppPublisher=The Git Development Community
+ AppPublisherURL={#APP_URL}
+ AppSupportURL={#APP_CONTACT_URL}
+-AppVersion={#APP_VERSION}
++AppVersion={#PROD_VERSION}
+ ChangesAssociations=yes
+ ChangesEnvironment=yes
+ CloseApplications=no
+@@ -73,11 +76,7 @@ PrivilegesRequired=none
+ #endif
+ UninstallDisplayIcon={app}\{#MINGW_BITNESS}\share\git\git-for-windows.ico
+ #ifndef COMPILE_FROM_IDE
+-#if Pos('-',APP_VERSION)>0
+-VersionInfoVersion={#Copy(APP_VERSION,1,Pos('-',APP_VERSION)-1)}
+-#else
+-VersionInfoVersion={#APP_VERSION}
+-#endif
++VersionInfoVersion={#FILE_VERSION}
+ #endif
+ 
+ ; Cosmetic
+-- 
+2.21.0
+

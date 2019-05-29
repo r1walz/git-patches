@@ -1,0 +1,21 @@
+From 08a74309130ccf34a0564a9c1e4fee719b4e9cbb Mon Sep 17 00:00:00 2001
+From: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
+Date: Wed, 29 May 2019 09:23:07 +0530
+Subject: [PATCH 0/1] installer: fix version of installer and installed file
+
+As reported by @JJClements, the File version and Product Version of the installer
+and installed binary were not the same. They are set by the `intaller/release.sh`
+and by using `sdk build (installer | git-and-installer)` commands, which created
+this discrepancy.
+
+Closes: git-for-windows/git#1797
+
+Rohit Ashiwal (1):
+  installer: fix version of installer and installed file
+
+ installer/install.iss | 19 +++++++++----------
+ 1 file changed, 9 insertions(+), 10 deletions(-)
+
+--
+2.21.0
+
