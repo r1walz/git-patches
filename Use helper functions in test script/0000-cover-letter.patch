@@ -1,0 +1,38 @@
+From:   Rohit Ashiwal <rohit.ashiwal265@gmail.com>
+To:     rohit.ashiwal265@gmail.com
+Cc:     Johannes.Schindelin@gmx.de, christian.couder@gmail.com,
+        git@vger.kernel.org, gitster@pobox.com, t.gummerer@gmail.com
+Subject: [GSoC][PATCH v3 0/3] Use helper functions in test script
+Date:   Mon,  4 Mar 2019 17:37:58 +0530
+Message-Id: <20190304120801.28763-1-rohit.ashiwal265@gmail.com>
+X-Mailer: git-send-email 2.17.1
+In-Reply-To: <20190303122842.30380-1-rohit.ashiwal265@gmail.com>
+References: <20190303122842.30380-1-rohit.ashiwal265@gmail.com>
+Sender: git-owner@vger.kernel.org
+Precedence: bulk
+List-ID: <git.vger.kernel.org>
+X-Mailing-List: git@vger.kernel.org
+Archived-At: <https://public-inbox.org/git/20190304120801.28763-1-rohit.ashiwal265@gmail.com/>
+List-Archive: <https://public-inbox.org/git/>
+List-Post: <mailto:git@vger.kernel.org>
+
+This patch ultimately aims to replace `test -(d|f|e|s)` calls in t3600-rm.sh
+Previously we were using these to verify the presence of diretory/file, but
+we already have helper functions, viz, `test_path_is_dir`, `test_path_is_file`,
+`test_path_is_missing` and `test_file_not_empty` with better functionality
+
+Helper functions are better as they provide better error messages and
+improve readability. They are friendly to someone new to code.
+
+Rohit Ashiwal (3):
+  test functions: add function `test_file_not_empty`
+  t3600: modernize style
+  t3600: use helpers to replace test -d/f/e/s <path>
+
+ t/t3600-rm.sh           | 349 ++++++++++++++++++++--------------------
+ t/test-lib-functions.sh |   9 ++
+ 2 files changed, 187 insertions(+), 171 deletions(-)
+
+-- 
+Rohit
+

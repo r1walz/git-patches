@@ -1,0 +1,50 @@
+From:   Rohit Ashiwal <rohit.ashiwal265@gmail.com>
+To:     rohit.ashiwal265@gmail.com
+Cc:     Johannes.Schindelin@gmx.de, christian.couder@gmail.com,
+        git@vger.kernel.org, gitster@pobox.com, t.gummerer@gmail.com
+Subject: [GSoC][PATCH v3 1/3] test functions: add function `test_file_not_empty`
+Date:   Mon,  4 Mar 2019 17:37:59 +0530
+Message-Id: <20190304120801.28763-2-rohit.ashiwal265@gmail.com>
+X-Mailer: git-send-email 2.17.1
+In-Reply-To: <20190304120801.28763-1-rohit.ashiwal265@gmail.com>
+References: <20190303122842.30380-1-rohit.ashiwal265@gmail.com>
+ <20190304120801.28763-1-rohit.ashiwal265@gmail.com>
+Sender: git-owner@vger.kernel.org
+Precedence: bulk
+List-ID: <git.vger.kernel.org>
+X-Mailing-List: git@vger.kernel.org
+Archived-At: <https://public-inbox.org/git/20190304120801.28763-2-rohit.ashiwal265@gmail.com/>
+List-Archive: <https://public-inbox.org/git/>
+List-Post: <mailto:git@vger.kernel.org>
+
+Add a helper function to ensure that a given path is a non-empty file,
+and give an error message when it is not.
+
+Signed-off-by: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
+---
+ t/test-lib-functions.sh | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/t/test-lib-functions.sh b/t/test-lib-functions.sh
+index 80402a428f..681c41ba32 100644
+--- a/t/test-lib-functions.sh
++++ b/t/test-lib-functions.sh
+@@ -593,6 +593,15 @@ test_dir_is_empty () {
+ 	fi
+ }
+ 
++# Check if the file exists and has a size greater than zero
++test_file_not_empty () {
++	if ! test -s "$1"
++	then
++		echo "'$1' is not a non-empty file."
++		false
++	fi
++}
++
+ test_path_is_missing () {
+ 	if test -e "$1"
+ 	then
+-- 
+Rohit
+
