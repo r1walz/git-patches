@@ -1,0 +1,23 @@
+From f31f5cf29030b1ee0fb25b61845404de054c4bd0 Mon Sep 17 00:00:00 2001
+From: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
+Date: Wed, 29 May 2019 09:04:15 +0530
+Subject: [PATCH 0/2] [FIX] git-archive error, gzip -cn : command not found
+
+git-archive uses `gzip -cn` to compress tar files but for this to work, gzip needs
+to be present on the host system, which sometimes is not the case.
+
+In our implementation, we are trying to add minimal code that will mimic gzip
+compression, so as to get rid of this gzip dependency.
+
+Closes: git-for-windows/git#1970
+
+Rohit Ashiwal (2):
+  archive: replace write_or_die() calls with write_block_or_die()
+  archive: avoid spawning `gzip`
+
+ archive-tar.c | 54 ++++++++++++++++++++++++++++++++++++++-------------
+ 1 file changed, 41 insertions(+), 13 deletions(-)
+
+--
+2.21.0
+

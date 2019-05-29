@@ -1,0 +1,84 @@
+From e00dd10fbd4d00bad4a02563cf0b151f35092189 Mon Sep 17 00:00:00 2001
+From: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
+Date: Fri, 15 Feb 2019 19:03:57 +0530
+Subject: [PATCH 1/2] [FIX] git-archive error, gzip -cn : command not found
+
+archive: replace write_or_die() calls with
+write_block_or_die() MinGit for Windows comes without `gzip` bundled inside,
+git-archive uses `gzip -cn` to compress tar files but for this to work, gzip
+needs to be present on the host system, which sometimes is not the case
+
+In the next commit, we will change the gzip compression
+so that we no longer spawn `gzip` but let zlib perform
+the compression in the same process
+
+In preparation for this, we consolidate all the block
+writes into a single function
+
+Closes: #1970
+Signed-off-by: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
+---
+ archive-tar.c | 20 ++++++++++++++++----
+ 1 file changed, 16 insertions(+), 4 deletions(-)
+
+diff --git a/archive-tar.c b/archive-tar.c
+index a58e1a8ebf..33795075a4 100644
+--- a/archive-tar.c
++++ b/archive-tar.c
+@@ -17,6 +17,8 @@ static unsigned long offset;
+
+ static int tar_umask = 002;
+
++static gzFile gzip;
++
+ static int write_tar_filter_archive(const struct archiver *ar,
+ 				    struct archiver_args *args);
+
+@@ -38,11 +40,21 @@ static int write_tar_filter_archive(const struct archiver *ar,
+ #define USTAR_MAX_MTIME 077777777777ULL
+ #endif
+
++/* writes out the whole block, or dies if fails */
++static void write_block_or_die(const char *block) {
++	if (gzip) {
++		if (gzwrite(gzip, block, (unsigned) BLOCKSIZE) != BLOCKSIZE)
++			die(_("gzwrite failed"));
++	} else {
++		write_or_die(1, block, BLOCKSIZE);
++	}
++}
++
+ /* writes out the whole block, but only if it is full */
+ static void write_if_needed(void)
+ {
+ 	if (offset == BLOCKSIZE) {
+-		write_or_die(1, block, BLOCKSIZE);
++		write_block_or_die(block);
+ 		offset = 0;
+ 	}
+ }
+@@ -66,7 +78,7 @@ static void do_write_blocked(const void *data, unsigned long size)
+ 		write_if_needed();
+ 	}
+ 	while (size >= BLOCKSIZE) {
+-		write_or_die(1, buf, BLOCKSIZE);
++		write_block_or_die(buf);
+ 		size -= BLOCKSIZE;
+ 		buf += BLOCKSIZE;
+ 	}
+@@ -101,10 +113,10 @@ static void write_trailer(void)
+ {
+ 	int tail = BLOCKSIZE - offset;
+ 	memset(block + offset, 0, tail);
+-	write_or_die(1, block, BLOCKSIZE);
++	write_block_or_die(block);
+ 	if (tail < 2 * RECORDSIZE) {
+ 		memset(block, 0, offset);
+-		write_or_die(1, block, BLOCKSIZE);
++		write_block_or_die(block);
+ 	}
+ }
+
+--
+2.21.0
+
