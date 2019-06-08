@@ -1,0 +1,33 @@
+From 1965b9b7d41608555830c3dc34f2c6b83d7f164f Mon Sep 17 00:00:00 2001
+From: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
+Date: Sat, 8 Jun 2019 23:48:01 +0530
+Subject: [GSoC][PATCH 0/3] Teach cherry-pick/revert to skip commits
+
+git am or rebase advice user to use git am --skip or git rebase --skip
+to skip the commit that has become empty or has risen conflicts. OTOH,
+cherry-pick advice user to use git reset HEAD which on the user’s part
+is annoying and sometimes confusing. This patch series will bring
+consistency between advices of these commands with introduction of
+`--skip` flag to cherry-pick and revert.
+
+Rohit Ashiwal (3):
+  sequencer: add advice for revert
+  cherry-pick/revert: add --skip option
+  cherry-pick/revert: update hints
+
+ Documentation/git-cherry-pick.txt |  4 +-
+ Documentation/git-revert.txt      |  4 +-
+ Documentation/sequencer.txt       |  4 ++
+ builtin/commit.c                  | 13 ++++---
+ builtin/revert.c                  |  5 +++
+ sequencer.c                       | 26 ++++++++++++-
+ sequencer.h                       |  1 +
+ t/t3510-cherry-pick-sequence.sh   | 63 +++++++++++++++++++++++++++++++
+ 8 files changed, 108 insertions(+), 12 deletions(-)
+
+PR: https://github.com/r1walz/git/pull/1
+Reviewed-by: Elijah Newren <newren@gmail.com>
+Reviewed-by: Thomas Gummerer <t.gummerer@gmail.com>
+-- 
+2.21.0
+
