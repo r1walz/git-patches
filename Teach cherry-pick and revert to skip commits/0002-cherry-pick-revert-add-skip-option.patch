@@ -1,28 +1,42 @@
-From 2c20a99bef5576e1a2c3c2fc95e9384f825419c7 Mon Sep 17 00:00:00 2001
+From 7fc22cdfb1094186a509799f0ac195e2fff81cf7 Mon Sep 17 00:00:00 2001
 From: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
 Date: Thu, 30 May 2019 05:56:02 +0530
-Subject: [GSoC][PATCH 2/3] cherry-pick/revert: add --skip option
+Subject: [GSoC][PATCH v2 2/3] cherry-pick/revert: add --skip option
 
-git am or rebase advise the user to use `git (am | rebase) --skip` to
-skip the commit. cherry-pick and revert also have this concept of
-skipping commits but they advise the user to use `git reset` (or in
-case of a patch which had conflicts, `git reset --merge`) which on the
-user's part is annoying and sometimes confusing. Add a `--skip` option
-to make these commands more consistent.
+git am or rebase have a --skip flag to skip the current commit if the
+user wishes to do so. During a cherry-pick or revert a user could
+likewise skip a commit, but needs to use 'git reset' (or in the case
+of conflicts 'git reset --merge'), followed by 'git (cherry-pick |
+revert) --continue' to skip the commit. This is more annoying and
+sometimes confusing on the users' part. Add a `--skip` option to make
+skipping commits easier for the user and to make the commands more
+consistent.
 
 In the next commit, we will change the advice messages hence finishing
-the process of teaching revert and cherry-pick "how to skip commits".
+the process of teaching revert and cherry-pick "how to skip commits."
 
 Signed-off-by: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
 ---
- Documentation/git-cherry-pick.txt |  4 +-
- Documentation/git-revert.txt      |  4 +-
- Documentation/sequencer.txt       |  4 ++
- builtin/revert.c                  |  5 +++
- sequencer.c                       | 23 +++++++++++
- sequencer.h                       |  1 +
- t/t3510-cherry-pick-sequence.sh   | 63 +++++++++++++++++++++++++++++++
- 7 files changed, 98 insertions(+), 6 deletions(-)
+I was not able to think what should I change in 'skip a commit and check
+if rest of sequence is correct' test. Please suggest how shall I fix this.
+But I think test is fine as it is now (because I wrote it and have been
+looking at it for a long time that I am out of ideas).
+
+changes since last revision:
+    - introduce new function `reset_merge` which will eliminate the problem
+      of wrong error "cannot abort from a branch yet to be born" which occurs
+      when head is NULL, but we still can skip (but not abort)
+    - `sequencer_skip` now calls `reset_merge` instead of `rollback_single_pick`
+    - add more tests
+
+ Documentation/git-cherry-pick.txt |   4 +-
+ Documentation/git-revert.txt      |   4 +-
+ Documentation/sequencer.txt       |   4 ++
+ builtin/revert.c                  |   5 ++
+ sequencer.c                       |  56 ++++++++++++++++
+ sequencer.h                       |   1 +
+ t/t3510-cherry-pick-sequence.sh   | 104 ++++++++++++++++++++++++++++++
+ 7 files changed, 172 insertions(+), 6 deletions(-)
 
 diff --git a/Documentation/git-cherry-pick.txt b/Documentation/git-cherry-pick.txt
 index 754b16ce0c..955880ab88 100644
@@ -100,34 +114,74 @@ index d4dcedbdc6..5dc5891ea2 100644
  }
  
 diff --git a/sequencer.c b/sequencer.c
-index 9c561a041b..f586e677d3 100644
+index ffb0257f0f..93284cd7dd 100644
 --- a/sequencer.c
 +++ b/sequencer.c
-@@ -2784,6 +2784,29 @@ int sequencer_rollback(struct repository *r, struct replay_opts *opts)
+@@ -2724,6 +2724,16 @@ static int rollback_is_safe(void)
+ 	return oideq(&actual_head, &expected_head);
+ }
+ 
++static int reset_merge(void) {
++	const char *argv[3];
++
++	argv[0] = "reset";
++	argv[1] = "--merge";
++	argv[2] = NULL;
++
++	return run_command_v_opt(argv, RUN_GIT_CMD);
++}
++
+ static int reset_for_rollback(const struct object_id *oid)
+ {
+ 	const char *argv[4];	/* reset --merge <arg> + NULL */
+@@ -2798,6 +2808,52 @@ int sequencer_rollback(struct repository *r, struct replay_opts *opts)
  	return -1;
  }
  
 +int sequencer_skip(struct repository *r, struct replay_opts *opts)
 +{
++	enum replay_action action = -1;
++	sequencer_get_last_command(r, &action);
++
 +	switch (opts->action) {
 +	case REPLAY_REVERT:
-+		if (!file_exists(git_path_revert_head(r)))
++		if (!file_exists(git_path_revert_head(r))) {
++			if (action == REPLAY_REVERT) {
++				if (!rollback_is_safe())
++					goto give_advice;
++				else
++					break;
++			}
 +			return error(_("no revert in progress"));
++		}
 +		break;
 +	case REPLAY_PICK:
-+		if (!file_exists(git_path_cherry_pick_head(r)))
++		if (!file_exists(git_path_cherry_pick_head(r))) {
++			if (action == REPLAY_PICK) {
++				if (!rollback_is_safe())
++					goto give_advice;
++				else
++					break;
++			}
 +			return error(_("no cherry-pick in progress"));
++		}
 +		break;
 +	default:
-+		BUG("the control must not reach here.");
++		BUG("the control must not reach here");
 +	}
 +
-+	if (rollback_single_pick(r))
++	if (reset_merge())
 +		return error(_("failed to skip the commit"));
 +	if (!is_directory(git_path_seq_dir()))
 +		return 0;
 +
 +	return sequencer_continue(r, opts);
++
++give_advice:
++	advise(_("have you committed already?\n"
++		 "try \"git %s --continue\""),
++		 action == REPLAY_REVERT ? "revert" : "cherry-pick");
++	return error(_("there is nothing to skip"));
 +}
 +
  static int save_todo(struct todo_list *todo_list, struct replay_opts *opts)
@@ -146,10 +200,10 @@ index 0c494b83d4..731b9853eb 100644
  
  #define TODO_LIST_KEEP_EMPTY (1U << 0)
 diff --git a/t/t3510-cherry-pick-sequence.sh b/t/t3510-cherry-pick-sequence.sh
-index 941d5026da..48cc9f13ee 100755
+index 941d5026da..6c1903a735 100755
 --- a/t/t3510-cherry-pick-sequence.sh
 +++ b/t/t3510-cherry-pick-sequence.sh
-@@ -93,6 +93,69 @@ test_expect_success 'cherry-pick cleans up sequencer state upon success' '
+@@ -93,6 +93,110 @@ test_expect_success 'cherry-pick cleans up sequencer state upon success' '
  	test_path_is_missing .git/sequencer
  '
  
@@ -214,6 +268,47 @@ index 941d5026da..48cc9f13ee 100755
 +	} >actual.log &&
 +	test_cmp expect foo &&
 +	test_cmp expect.log actual.log
++'
++
++test_expect_success 'check advice when we move HEAD by committing' '
++	pristine_detach initial &&
++	cat >expect <<-EOF &&
++	hint: have you committed already?
++	hint: try "git cherry-pick --continue"
++	error: there is nothing to skip
++	fatal: cherry-pick failed
++	EOF
++	test_must_fail git cherry-pick base..yetanotherpick &&
++	echo c >foo &&
++	git commit -a &&
++	test_path_is_missing .git/CHERRY_PICK_HEAD &&
++	test_must_fail git cherry-pick --skip 2>advice &&
++	test_cmp expect advice
++'
++
++test_expect_success 'allow skipping commit but not abort for a new history' '
++	pristine_detach initial &&
++	cat >expect <<-EOF &&
++	error: cannot abort from a branch yet to be born
++	fatal: cherry-pick failed
++	EOF
++	git checkout --orphan new_disconnected &&
++	git reset --hard &&
++	test_must_fail git cherry-pick anotherpick &&
++	test_must_fail git cherry-pick --abort 2>advice &&
++	git cherry-pick --skip &&
++	test_cmp expect advice
++'
++
++test_expect_success 'allow skipping stopped cherry-pick because of untracked file modifications' '
++	pristine_detach initial &&
++	git checkout --orphan new_disconnected &&
++	git reset --hard &&
++	test_commit new_disconnected foo a &&
++	echo unrelated >unrelated &&
++	test_must_fail git cherry-pick new_disconnected..base &&
++	test_path_is_missing .git/CHERRY_PICK_HEAD &&
++	git cherry-pick --skip
 +'
 +
  test_expect_success '--quit does not complain when no cherry-pick is in progress' '
