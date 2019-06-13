@@ -1,7 +1,7 @@
-From 7fc22cdfb1094186a509799f0ac195e2fff81cf7 Mon Sep 17 00:00:00 2001
+From 7f4421f86793fb1d394bfc2536cc76165820a517 Mon Sep 17 00:00:00 2001
 From: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
 Date: Thu, 30 May 2019 05:56:02 +0530
-Subject: [GSoC][PATCH v2 2/3] cherry-pick/revert: add --skip option
+Subject: [GSoC][PATCH v3 2/3] cherry-pick/revert: add --skip option
 
 git am or rebase have a --skip flag to skip the current commit if the
 user wishes to do so. During a cherry-pick or revert a user could
@@ -12,31 +12,28 @@ sometimes confusing on the users' part. Add a `--skip` option to make
 skipping commits easier for the user and to make the commands more
 consistent.
 
-In the next commit, we will change the advice messages hence finishing
-the process of teaching revert and cherry-pick "how to skip commits."
+In the next commit, we will change the advice messages and some tests
+hence finishing the process of teaching revert and cherry-pick
+"how to skip commits".
 
 Signed-off-by: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
 ---
-I was not able to think what should I change in 'skip a commit and check
-if rest of sequence is correct' test. Please suggest how shall I fix this.
-But I think test is fine as it is now (because I wrote it and have been
-looking at it for a long time that I am out of ideas).
+changes:
+    - Remove `reset_merge` from last revision[1] and modified `reset_for_rollback`
+      and signature of `rollback_single_pick` to handle if `--skip` flag
+    - Modify test which gave "ambiguous refname" warning[2]
 
-changes since last revision:
-    - introduce new function `reset_merge` which will eliminate the problem
-      of wrong error "cannot abort from a branch yet to be born" which occurs
-      when head is NULL, but we still can skip (but not abort)
-    - `sequencer_skip` now calls `reset_merge` instead of `rollback_single_pick`
-    - add more tests
+[1]: https://public-inbox.org/git/20190608191958.4593-1-rohit.ashiwal265@gmail.com/T/#m11a573a3b91dfd2fcfae40c6ecc2148f8c92e10c
+[2]: https://public-inbox.org/git/20190608191958.4593-1-rohit.ashiwal265@gmail.com/T/#m586cb8930cfcb737e4f19662f0eef3716b1e9d35
 
  Documentation/git-cherry-pick.txt |   4 +-
  Documentation/git-revert.txt      |   4 +-
  Documentation/sequencer.txt       |   4 ++
  builtin/revert.c                  |   5 ++
- sequencer.c                       |  56 ++++++++++++++++
+ sequencer.c                       |  67 +++++++++++++++++---
  sequencer.h                       |   1 +
- t/t3510-cherry-pick-sequence.sh   | 104 ++++++++++++++++++++++++++++++
- 7 files changed, 172 insertions(+), 6 deletions(-)
+ t/t3510-cherry-pick-sequence.sh   | 102 ++++++++++++++++++++++++++++++
+ 7 files changed, 171 insertions(+), 16 deletions(-)
 
 diff --git a/Documentation/git-cherry-pick.txt b/Documentation/git-cherry-pick.txt
 index 754b16ce0c..955880ab88 100644
@@ -114,27 +111,55 @@ index d4dcedbdc6..5dc5891ea2 100644
  }
  
 diff --git a/sequencer.c b/sequencer.c
-index ffb0257f0f..93284cd7dd 100644
+index 918cb5d761..6b78a26920 100644
 --- a/sequencer.c
 +++ b/sequencer.c
-@@ -2724,6 +2724,16 @@ static int rollback_is_safe(void)
- 	return oideq(&actual_head, &expected_head);
- }
+@@ -2733,25 +2733,26 @@ static int rollback_is_safe(void)
  
-+static int reset_merge(void) {
-+	const char *argv[3];
-+
-+	argv[0] = "reset";
-+	argv[1] = "--merge";
-+	argv[2] = NULL;
-+
-+	return run_command_v_opt(argv, RUN_GIT_CMD);
-+}
-+
  static int reset_for_rollback(const struct object_id *oid)
  {
- 	const char *argv[4];	/* reset --merge <arg> + NULL */
-@@ -2798,6 +2808,52 @@ int sequencer_rollback(struct repository *r, struct replay_opts *opts)
+-	const char *argv[4];	/* reset --merge <arg> + NULL */
++	struct argv_array argv = ARGV_ARRAY_INIT;	/* reset --merge <arg> + NULL */
+ 
+-	argv[0] = "reset";
+-	argv[1] = "--merge";
+-	argv[2] = oid_to_hex(oid);
+-	argv[3] = NULL;
+-	return run_command_v_opt(argv, RUN_GIT_CMD);
++	argv_array_pushl(&argv, "reset", "--merge", NULL);
++
++	if (!is_null_oid(oid))
++		argv_array_push(&argv, oid_to_hex(oid));
++
++	return run_command_v_opt(argv.argv, RUN_GIT_CMD);
+ }
+ 
+-static int rollback_single_pick(struct repository *r)
++static int rollback_single_pick(struct repository *r, unsigned int is_skip)
+ {
+ 	struct object_id head_oid;
+ 
+ 	if (!file_exists(git_path_cherry_pick_head(r)) &&
+-	    !file_exists(git_path_revert_head(r)))
++	    !file_exists(git_path_revert_head(r)) && !is_skip)
+ 		return error(_("no cherry-pick or revert in progress"));
+ 	if (read_ref_full("HEAD", 0, &head_oid, NULL))
+ 		return error(_("cannot resolve HEAD"));
+-	if (is_null_oid(&head_oid))
++	if (is_null_oid(&head_oid) && !is_skip)
+ 		return error(_("cannot abort from a branch yet to be born"));
+ 	return reset_for_rollback(&head_oid);
+ }
+@@ -2770,7 +2771,7 @@ int sequencer_rollback(struct repository *r, struct replay_opts *opts)
+ 		 * If CHERRY_PICK_HEAD or REVERT_HEAD indicates
+ 		 * a single-cherry-pick in progress, abort that.
+ 		 */
+-		return rollback_single_pick(r);
++		return rollback_single_pick(r, 0);
+ 	}
+ 	if (!f)
+ 		return error_errno(_("cannot open '%s'"), git_path_head_file());
+@@ -2805,6 +2806,52 @@ int sequencer_rollback(struct repository *r, struct replay_opts *opts)
  	return -1;
  }
  
@@ -170,7 +195,7 @@ index ffb0257f0f..93284cd7dd 100644
 +		BUG("the control must not reach here");
 +	}
 +
-+	if (reset_merge())
++	if (rollback_single_pick(r, 1))
 +		return error(_("failed to skip the commit"));
 +	if (!is_directory(git_path_seq_dir()))
 +		return 0;
@@ -200,10 +225,10 @@ index 0c494b83d4..731b9853eb 100644
  
  #define TODO_LIST_KEEP_EMPTY (1U << 0)
 diff --git a/t/t3510-cherry-pick-sequence.sh b/t/t3510-cherry-pick-sequence.sh
-index 941d5026da..6c1903a735 100755
+index 941d5026da..f85ef51cac 100755
 --- a/t/t3510-cherry-pick-sequence.sh
 +++ b/t/t3510-cherry-pick-sequence.sh
-@@ -93,6 +93,110 @@ test_expect_success 'cherry-pick cleans up sequencer state upon success' '
+@@ -93,6 +93,108 @@ test_expect_success 'cherry-pick cleans up sequencer state upon success' '
  	test_path_is_missing .git/sequencer
  '
  
@@ -302,11 +327,9 @@ index 941d5026da..6c1903a735 100755
 +
 +test_expect_success 'allow skipping stopped cherry-pick because of untracked file modifications' '
 +	pristine_detach initial &&
-+	git checkout --orphan new_disconnected &&
-+	git reset --hard &&
-+	test_commit new_disconnected foo a &&
-+	echo unrelated >unrelated &&
-+	test_must_fail git cherry-pick new_disconnected..base &&
++	git rm --cached unrelated &&
++	git commit -m "untrack unrelated" &&
++	test_must_fail git cherry-pick initial base &&
 +	test_path_is_missing .git/CHERRY_PICK_HEAD &&
 +	git cherry-pick --skip
 +'

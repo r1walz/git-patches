@@ -1,7 +1,7 @@
-From 9fb4f865ff5e6272612132cc6d7c617aabe8e6db Mon Sep 17 00:00:00 2001
+From 65465f3fbb1d5d5b6a3e84241f88010f479c77cc Mon Sep 17 00:00:00 2001
 From: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
 Date: Thu, 30 May 2019 06:07:00 +0530
-Subject: [GSoC][PATCH v2 3/3] cherry-pick/revert: advise using --skip
+Subject: [GSoC][PATCH v3 3/3] cherry-pick/revert: advise using --skip
 
 The previous commit introduced a --skip flag for cherry-pick and
 revert. Update the advice messages, to tell users about this less
@@ -10,14 +10,13 @@ everything is working fine.
 
 Signed-off-by: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
 ---
-changes since last revision:
-    - selectively advice --skip
-    - add new test
+changes:
+    - No major changes, change slightly according to the previous commits
 
  builtin/commit.c                | 13 ++++++++-----
- sequencer.c                     |  7 +++++--
+ sequencer.c                     | 11 ++++++++---
  t/t3510-cherry-pick-sequence.sh | 20 ++++++++++++++++++++
- 3 files changed, 33 insertions(+), 7 deletions(-)
+ 3 files changed, 36 insertions(+), 8 deletions(-)
 
 diff --git a/builtin/commit.c b/builtin/commit.c
 index 1c9e8e2228..1f47c51bdc 100644
@@ -48,27 +47,46 @@ index 1c9e8e2228..1f47c51bdc 100644
  static const char *color_status_slots[] = {
  	[WT_STATUS_HEADER]	  = "header",
 diff --git a/sequencer.c b/sequencer.c
-index 93284cd7dd..ecf4be7e15 100644
+index 6b78a26920..5d189791ee 100644
 --- a/sequencer.c
 +++ b/sequencer.c
-@@ -2661,10 +2661,13 @@ static int create_seq_dir(struct repository *r)
- 			error(_("a %s is already in progress"),
- 				 action == REPLAY_REVERT ?
- 				 "revert" : "cherry-pick");
--			advise(_("try \"git %s (--continue | "
-+			advise(_("try \"git %s (--continue | %s"
- 				 "--quit | --abort)\""),
- 				 action == REPLAY_REVERT ?
--				 "revert" : "cherry-pick");
-+				 "revert" : "cherry-pick",
-+				 !file_exists(git_path_revert_head(r)) ?
-+				 !file_exists(git_path_cherry_pick_head(r)) ? ""
-+				 : "--skip | " : "--skip | ");
- 			return -1;
+@@ -2655,18 +2655,20 @@ static int create_seq_dir(struct repository *r)
+ 	enum replay_action action;
+ 	const char *in_progress_advice;
+ 	const char *in_progress_error = NULL;
++	unsigned int advise_skip = file_exists(git_path_revert_head(r)) ||
++				file_exists(git_path_cherry_pick_head(r));
+ 
+ 	if (!sequencer_get_last_command(r, &action)) {
+ 		switch (action) {
+ 		case REPLAY_REVERT:
+ 			in_progress_error = _("revert is already in progress");
+ 			in_progress_advice =
+-			_("try \"git revert (--continue | --abort | --quit)\"");
++			_("try \"git revert (--continue | %s--abort | --quit)\"");
+ 			break;
+ 		case REPLAY_PICK:
+ 			in_progress_error = _("cherry-pick is already in progress");
+ 			in_progress_advice =
+-			_("try \"git cherry-pick (--continue | --abort | --quit)\"");
++			_("try \"git cherry-pick (--continue | %s--abort | --quit)\"");
+ 			break;
  		default:
  			BUG(_("the control must not reach here"));
+@@ -2674,7 +2676,10 @@ static int create_seq_dir(struct repository *r)
+ 	}
+ 	if (in_progress_error) {
+ 		error("%s", in_progress_error);
+-		advise("%s", in_progress_advice);
++		if (advise_skip)
++			advise(in_progress_advice, "--skip | ");
++		else
++			advise(in_progress_advice, "");
+ 		return -1;
+ 	}
+ 	if (mkdir(git_path_seq_dir(), 0777) < 0)
 diff --git a/t/t3510-cherry-pick-sequence.sh b/t/t3510-cherry-pick-sequence.sh
-index 6c1903a735..f298f02cd0 100755
+index f85ef51cac..8672f0b2cd 100755
 --- a/t/t3510-cherry-pick-sequence.sh
 +++ b/t/t3510-cherry-pick-sequence.sh
 @@ -172,6 +172,26 @@ test_expect_success 'check advice when we move HEAD by committing' '
@@ -78,16 +96,16 @@ index 6c1903a735..f298f02cd0 100755
 +test_expect_success 'selectively advise --skip while launching another sequence' '
 +	pristine_detach initial &&
 +	cat >expect <<-EOF &&
-+	error: a cherry-pick is already in progress
-+	hint: try "git cherry-pick (--continue | --skip | --quit | --abort)"
++	error: cherry-pick is already in progress
++	hint: try "git cherry-pick (--continue | --skip | --abort | --quit)"
 +	fatal: cherry-pick failed
 +	EOF
 +	test_must_fail git cherry-pick picked..yetanotherpick &&
 +	test_must_fail git cherry-pick picked..yetanotherpick 2>advice &&
 +	test_cmp expect advice &&
 +	cat >expect <<-EOF &&
-+	error: a cherry-pick is already in progress
-+	hint: try "git cherry-pick (--continue | --quit | --abort)"
++	error: cherry-pick is already in progress
++	hint: try "git cherry-pick (--continue | --abort | --quit)"
 +	fatal: cherry-pick failed
 +	EOF
 +	git reset --merge &&
