@@ -1,28 +1,30 @@
-From 65465f3fbb1d5d5b6a3e84241f88010f479c77cc Mon Sep 17 00:00:00 2001
+From 941e73b654b9dd530c4aec64fb5a51c3707ff4e7 Mon Sep 17 00:00:00 2001
 From: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
-Date: Thu, 13 Jun 2019 09:19:43 +0530
-Subject: [GSoC][PATCH v3 0/3] Teach cherry-pick/revert to skip commits
+Date: Sun, 16 Jun 2019 13:29:03 +0530
+Subject: [GSoC][PATCH v4 0/4] [GSoC][PATCH 0/3] Teach cherry-pick/revert to skip commits
 
-Adding a `--skip` option to make skipping commits easier for the user
-and to make the commands more consistent. This will serve as a small
-step to the bigger goal which improving consistency of sequencer commands,
-i.e., improving how command line arguments are handled, this will also
-lead to better user experience because of the precise advice provided.
+Yet another iteration of my patch. We have changed the series a little bit. We
+now have a commit that rename `reset_for_rollback` to `reset_merge`. A lot of
+nit-picks were handled in this revision.
 
-Rohit Ashiwal (3):
+Thanks
+Rohit
+
+Rohit Ashiwal (4):
   sequencer: add advice for revert
+  sequencer: rename reset_for_rollback to reset_merge
   cherry-pick/revert: add --skip option
   cherry-pick/revert: advise using --skip
 
  Documentation/git-cherry-pick.txt |   4 +-
  Documentation/git-revert.txt      |   4 +-
  Documentation/sequencer.txt       |   4 +
- builtin/commit.c                  |  13 ++--
+ builtin/commit.c                  |  13 +--
  builtin/revert.c                  |   5 ++
- sequencer.c                       | 106 ++++++++++++++++++++++----
+ sequencer.c                       | 139 ++++++++++++++++++++++++++----
  sequencer.h                       |   1 +
- t/t3510-cherry-pick-sequence.sh   | 122 ++++++++++++++++++++++++++++++
- 8 files changed, 232 insertions(+), 27 deletions(-)
+ t/t3510-cherry-pick-sequence.sh   | 122 ++++++++++++++++++++++++++
+ 8 files changed, 266 insertions(+), 26 deletions(-)
 
 -- 
 2.21.0

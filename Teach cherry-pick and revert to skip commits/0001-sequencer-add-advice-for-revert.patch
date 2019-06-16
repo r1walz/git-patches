@@ -1,7 +1,7 @@
-From fa97c13c4e793be0eec37e5973f873fa1a137328 Mon Sep 17 00:00:00 2001
+From 59fa13c4d87195e72d4746b95b88cd7fad36029a Mon Sep 17 00:00:00 2001
 From: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
 Date: Thu, 30 May 2019 05:30:27 +0530
-Subject: [GSoC][PATCH v3 1/3] sequencer: add advice for revert
+Subject: [GSoC][PATCH v4 1/4] sequencer: add advice for revert
 
 In the case of merge conflicts, while performing a revert, we are
 currently advised to use `git cherry-pick --<sequencer-options>`
@@ -13,16 +13,13 @@ selectively.
 Signed-off-by: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
 ---
 changes:
-    - Following Junio's advice[1], I've changed how we're handling error and
-      advice fundamentally.
-
-[1]: https://public-inbox.org/git/20190608191958.4593-1-rohit.ashiwal265@gmail.com/T/#mf8eefb068b7246c7c2a02cc8f7120a1a903a1eba
+    - change BUG()'s message under create_seq_dir
 
  sequencer.c | 34 ++++++++++++++++++++++++++++------
  1 file changed, 28 insertions(+), 6 deletions(-)
 
 diff --git a/sequencer.c b/sequencer.c
-index f88a97fb10..918cb5d761 100644
+index f88a97fb10..d80e1c3fbb 100644
 --- a/sequencer.c
 +++ b/sequencer.c
 @@ -2650,15 +2650,37 @@ static int walk_revs_populate_todo(struct todo_list *todo_list,
@@ -36,8 +33,8 @@ index f88a97fb10..918cb5d761 100644
 -		error(_("a cherry-pick or revert is already in progress"));
 -		advise(_("try \"git cherry-pick (--continue | --quit | --abort)\""));
 +	enum replay_action action;
-+	const char *in_progress_advice;
 +	const char *in_progress_error = NULL;
++	const char *in_progress_advice = NULL;
 +
 +	if (!sequencer_get_last_command(r, &action)) {
 +		switch (action) {
@@ -52,7 +49,7 @@ index f88a97fb10..918cb5d761 100644
 +			_("try \"git cherry-pick (--continue | --abort | --quit)\"");
 +			break;
 +		default:
-+			BUG(_("the control must not reach here"));
++			BUG(_("unexpected action in create_seq_dir"));
 +		}
 +	}
 +	if (in_progress_error) {

@@ -1,7 +1,7 @@
-From 65465f3fbb1d5d5b6a3e84241f88010f479c77cc Mon Sep 17 00:00:00 2001
+From 941e73b654b9dd530c4aec64fb5a51c3707ff4e7 Mon Sep 17 00:00:00 2001
 From: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
 Date: Thu, 30 May 2019 06:07:00 +0530
-Subject: [GSoC][PATCH v3 3/3] cherry-pick/revert: advise using --skip
+Subject: [GSoC][PATCH v4 4/4] cherry-pick/revert: advise using --skip
 
 The previous commit introduced a --skip flag for cherry-pick and
 revert. Update the advice messages, to tell users about this less
@@ -11,7 +11,7 @@ everything is working fine.
 Signed-off-by: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
 ---
 changes:
-    - No major changes, change slightly according to the previous commits
+    - Use test_i18ncmp instead of tmp_cmp
 
  builtin/commit.c                | 13 ++++++++-----
  sequencer.c                     | 11 ++++++++---
@@ -47,13 +47,13 @@ index 1c9e8e2228..1f47c51bdc 100644
  static const char *color_status_slots[] = {
  	[WT_STATUS_HEADER]	  = "header",
 diff --git a/sequencer.c b/sequencer.c
-index 6b78a26920..5d189791ee 100644
+index 95fa19a118..6e8afe8f22 100644
 --- a/sequencer.c
 +++ b/sequencer.c
 @@ -2655,18 +2655,20 @@ static int create_seq_dir(struct repository *r)
  	enum replay_action action;
- 	const char *in_progress_advice;
  	const char *in_progress_error = NULL;
+ 	const char *in_progress_advice = NULL;
 +	unsigned int advise_skip = file_exists(git_path_revert_head(r)) ||
 +				file_exists(git_path_cherry_pick_head(r));
  
@@ -72,7 +72,7 @@ index 6b78a26920..5d189791ee 100644
 +			_("try \"git cherry-pick (--continue | %s--abort | --quit)\"");
  			break;
  		default:
- 			BUG(_("the control must not reach here"));
+ 			BUG(_("unexpected action in create_seq_dir"));
 @@ -2674,7 +2676,10 @@ static int create_seq_dir(struct repository *r)
  	}
  	if (in_progress_error) {
@@ -86,11 +86,11 @@ index 6b78a26920..5d189791ee 100644
  	}
  	if (mkdir(git_path_seq_dir(), 0777) < 0)
 diff --git a/t/t3510-cherry-pick-sequence.sh b/t/t3510-cherry-pick-sequence.sh
-index f85ef51cac..8672f0b2cd 100755
+index dc0ac8343c..0e8adc95fc 100755
 --- a/t/t3510-cherry-pick-sequence.sh
 +++ b/t/t3510-cherry-pick-sequence.sh
 @@ -172,6 +172,26 @@ test_expect_success 'check advice when we move HEAD by committing' '
- 	test_cmp expect advice
+ 	test_i18ncmp expect advice
  '
  
 +test_expect_success 'selectively advise --skip while launching another sequence' '
@@ -102,7 +102,7 @@ index f85ef51cac..8672f0b2cd 100755
 +	EOF
 +	test_must_fail git cherry-pick picked..yetanotherpick &&
 +	test_must_fail git cherry-pick picked..yetanotherpick 2>advice &&
-+	test_cmp expect advice &&
++	test_i18ncmp expect advice &&
 +	cat >expect <<-EOF &&
 +	error: cherry-pick is already in progress
 +	hint: try "git cherry-pick (--continue | --abort | --quit)"
@@ -110,7 +110,7 @@ index f85ef51cac..8672f0b2cd 100755
 +	EOF
 +	git reset --merge &&
 +	test_must_fail git cherry-pick picked..yetanotherpick 2>advice &&
-+	test_cmp expect advice
++	test_i18ncmp expect advice
 +'
 +
  test_expect_success 'allow skipping commit but not abort for a new history' '
