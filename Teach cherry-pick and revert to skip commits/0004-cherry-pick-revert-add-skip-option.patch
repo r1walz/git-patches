@@ -1,7 +1,7 @@
-From 29686d828f004fd98f5f809865158fb95a329687 Mon Sep 17 00:00:00 2001
+From 825486c22d57ea15ae08946c11441841aa8762dd Mon Sep 17 00:00:00 2001
 From: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
 Date: Thu, 30 May 2019 05:56:02 +0530
-Subject: [GSoC][PATCH v4 3/4] cherry-pick/revert: add --skip option
+Subject: [GSoC][PATCH v5 4/5] cherry-pick/revert: add --skip option
 
 git am or rebase have a --skip flag to skip the current commit if the
 user wishes to do so. During a cherry-pick or revert a user could
@@ -12,27 +12,19 @@ sometimes confusing on the users' part. Add a `--skip` option to make
 skipping commits easier for the user and to make the commands more
 consistent.
 
-In the next commit, we will change the advice messages and some tests
-hence finishing the process of teaching revert and cherry-pick
-"how to skip commits".
+In the next commit, we will change the advice messages hence finishing
+the process of teaching revert and cherry-pick "how to skip commits".
 
 Signed-off-by: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
 ---
-changes:
-    - Introduce '('s around documentation/help
-    - Introduce a wrapper function skip_single_pick to reset_merge
-    - Add comments to sequencer_skip
-    - Change tests to use test_i18ncmp instead of test_cmp to not fail under
-      GETTEXT_POISON
-
  Documentation/git-cherry-pick.txt |   4 +-
  Documentation/git-revert.txt      |   4 +-
  Documentation/sequencer.txt       |   4 ++
  builtin/revert.c                  |   5 ++
- sequencer.c                       |  94 +++++++++++++++++++++++++--
+ sequencer.c                       |  69 ++++++++++++++++++++
  sequencer.h                       |   1 +
  t/t3510-cherry-pick-sequence.sh   | 102 ++++++++++++++++++++++++++++++
- 7 files changed, 202 insertions(+), 12 deletions(-)
+ 7 files changed, 183 insertions(+), 6 deletions(-)
 
 diff --git a/Documentation/git-cherry-pick.txt b/Documentation/git-cherry-pick.txt
 index 754b16ce0c..83ce51aedf 100644
@@ -110,35 +102,10 @@ index d4dcedbdc6..5dc5891ea2 100644
  }
  
 diff --git a/sequencer.c b/sequencer.c
-index 408643f88a..95fa19a118 100644
+index 6762a5f485..5720cd1c85 100644
 --- a/sequencer.c
 +++ b/sequencer.c
-@@ -2733,13 +2733,18 @@ static int rollback_is_safe(void)
- 
- static int reset_merge(const struct object_id *oid)
- {
--	const char *argv[4];	/* reset --merge <arg> + NULL */
-+	int ret;
-+	struct argv_array argv = ARGV_ARRAY_INIT;
- 
--	argv[0] = "reset";
--	argv[1] = "--merge";
--	argv[2] = oid_to_hex(oid);
--	argv[3] = NULL;
--	return run_command_v_opt(argv, RUN_GIT_CMD);
-+	argv_array_pushl(&argv, "reset", "--merge", NULL);
-+
-+	if (!is_null_oid(oid))
-+		argv_array_push(&argv, oid_to_hex(oid));
-+
-+	ret = run_command_v_opt(argv.argv, RUN_GIT_CMD);
-+	argv_array_clear(&argv);
-+
-+	return ret;
- }
- 
- static int rollback_single_pick(struct repository *r)
-@@ -2756,6 +2761,15 @@ static int rollback_single_pick(struct repository *r)
+@@ -2761,6 +2761,15 @@ static int rollback_single_pick(struct repository *r)
  	return reset_merge(&head_oid);
  }
  
@@ -154,7 +121,7 @@ index 408643f88a..95fa19a118 100644
  int sequencer_rollback(struct repository *r, struct replay_opts *opts)
  {
  	FILE *f;
-@@ -2805,6 +2819,74 @@ int sequencer_rollback(struct repository *r, struct replay_opts *opts)
+@@ -2810,6 +2819,66 @@ int sequencer_rollback(struct repository *r, struct replay_opts *opts)
  	return -1;
  }
  
@@ -164,48 +131,40 @@ index 408643f88a..95fa19a118 100644
 +	sequencer_get_last_command(r, &action);
 +
 +	/*
-+	 * opts->action tells us which subcommand requested to skip
-+	 * the commit.
++	 * Check whether the subcommand requested to skip the commit is actually
++	 * in progress and that it's safe to skip the commit.
++	 *
++	 * opts->action tells us which subcommand requested to skip the commit.
++	 * If the corresponding .git/<ACTION>_HEAD exists, we know that the
++	 * action is in progress and we can skip the commit.
++	 *
++	 * Otherwise we check that the last instruction was related to the
++	 * particular subcommand we're trying to execute and barf if that's not
++	 * the case.
++	 *
++	 * Finally we check that the rollback is "safe", i.e., has the HEAD
++	 * moved? In this case, it doesn't make sense to "reset the merge" and
++	 * "skip the commit" as the user already handled this by committing. But
++	 * we'd not want to barf here, instead give advice on how to proceed. We
++	 * only need to check that when .git/<ACTION>_HEAD doesn't exist because
++	 * it gets removed when the user commits, so if it still exists we're
++	 * sure the user can't have committed before.
 +	 */
 +	switch (opts->action) {
 +	case REPLAY_REVERT:
-+		/*
-+		 * If .git/REVERT_HEAD exists then we are sure that we are in
-+		 * the middle of a revert and we allow to skip the commit.
-+		 */
 +		if (!file_exists(git_path_revert_head(r))) {
-+			/*
-+			 * Check if the last instruction executed was related to
-+			 * revert. If so, we are sure that a revert is in progress.
-+			 *
-+			 * NB: single commit revert is also counted in this
-+			 * definition of "progress" (and was dealt with in the
-+			 * previous check).
-+			 */
-+			if (action == REPLAY_REVERT) {
-+				/*
-+				 * Check if the user has moved the HEAD, i.e.,
-+				 * already committed. In this case, we would like
-+				 * to advise instead of skipping.
-+				 */
-+				if (!rollback_is_safe())
-+					goto give_advice;
-+				else
-+					/* skip commit :) */
-+					break;
-+			}
-+			return error(_("no revert in progress"));
++			if (action != REPLAY_REVERT)
++				return error(_("no revert in progress"));
++			if (!rollback_is_safe())
++				goto give_advice;
 +		}
 +		break;
 +	case REPLAY_PICK:
 +		if (!file_exists(git_path_cherry_pick_head(r))) {
-+			if (action == REPLAY_PICK) {
-+				if (!rollback_is_safe())
-+					goto give_advice;
-+				else
-+					break;
-+			}
-+			return error(_("no cherry-pick in progress"));
++			if (action != REPLAY_PICK)
++				return error(_("no cherry-pick in progress"));
++			if (!rollback_is_safe())
++				goto give_advice;
 +		}
 +		break;
 +	default:

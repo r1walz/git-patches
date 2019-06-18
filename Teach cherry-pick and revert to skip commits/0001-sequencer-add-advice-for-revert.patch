@@ -1,7 +1,7 @@
-From 59fa13c4d87195e72d4746b95b88cd7fad36029a Mon Sep 17 00:00:00 2001
+From 67c212090d51b54e409caf316d127112fa6f0148 Mon Sep 17 00:00:00 2001
 From: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
 Date: Thu, 30 May 2019 05:30:27 +0530
-Subject: [GSoC][PATCH v4 1/4] sequencer: add advice for revert
+Subject: [GSoC][PATCH v5 1/5] sequencer: add advice for revert
 
 In the case of merge conflicts, while performing a revert, we are
 currently advised to use `git cherry-pick --<sequencer-options>`
@@ -12,14 +12,11 @@ selectively.
 
 Signed-off-by: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
 ---
-changes:
-    - change BUG()'s message under create_seq_dir
-
  sequencer.c | 34 ++++++++++++++++++++++++++++------
  1 file changed, 28 insertions(+), 6 deletions(-)
 
 diff --git a/sequencer.c b/sequencer.c
-index f88a97fb10..d80e1c3fbb 100644
+index f88a97fb10..c644368b54 100644
 --- a/sequencer.c
 +++ b/sequencer.c
 @@ -2650,15 +2650,37 @@ static int walk_revs_populate_todo(struct todo_list *todo_list,
@@ -49,7 +46,7 @@ index f88a97fb10..d80e1c3fbb 100644
 +			_("try \"git cherry-pick (--continue | --abort | --quit)\"");
 +			break;
 +		default:
-+			BUG(_("unexpected action in create_seq_dir"));
++			BUG("unexpected action in create_seq_dir");
 +		}
 +	}
 +	if (in_progress_error) {
