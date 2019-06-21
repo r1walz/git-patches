@@ -1,17 +1,11 @@
-From 63dbc11ab1334348bec28ba11d095d5e9c653155 Mon Sep 17 00:00:00 2001
+From 8f278b5139dbd298ae694d0d0da4ea52568602ad Mon Sep 17 00:00:00 2001
 From: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
-Date: Tue, 18 Jun 2019 22:21:18 +0530
-Subject: [GSoC][PATCH v5 0/5] Teach cherry-pick/revert to skip commits
+Date: Fri, 21 Jun 2019 14:34:50 +0530
+Subject: [GSoC][PATCH v6 0/5] Teach cherry-pick/revert to skip commits
 
-Here is another round of my patch, hopefully I have addressed all the changes.
-  - I have introduced a separate commit which changes `reset_merge` to use
-    `argv_array` instead of a manual `char *argv`. This will avoid specifying
-    array size and index and make code easier to read and extend
-  - Removed _() from BUG() messages
-  - Rearrange comments under `sequencer_skip`. I have not changed switch-case to
-    if-else since the former looked better to me
-
-Thanks
+I've covered the advice message behind `advice_resolve_conflict` variable and
+changed the order of error and advice to match that of 1/5. I believe that we
+don't have any advice variable appropriate for advice in 1/5.
 
 Rohit Ashiwal (5):
   sequencer: add advice for revert
@@ -25,154 +19,44 @@ Rohit Ashiwal (5):
  Documentation/sequencer.txt       |   4 +
  builtin/commit.c                  |  13 +--
  builtin/revert.c                  |   5 ++
- sequencer.c                       | 131 ++++++++++++++++++++++++++----
+ sequencer.c                       | 135 ++++++++++++++++++++++++++----
  sequencer.h                       |   1 +
- t/t3510-cherry-pick-sequence.sh   | 122 ++++++++++++++++++++++++++++
- 8 files changed, 258 insertions(+), 26 deletions(-)
+ t/t3510-cherry-pick-sequence.sh   | 122 +++++++++++++++++++++++++++
+ 8 files changed, 262 insertions(+), 26 deletions(-)
 
 Range-diff:
-1:  59fa13c4d8 ! 1:  67c212090d sequencer: add advice for revert
-    @@ -41,7 +41,7 @@
-     +			_("try \"git cherry-pick (--continue | --abort | --quit)\"");
-     +			break;
-     +		default:
-    -+			BUG(_("unexpected action in create_seq_dir"));
-    ++			BUG("unexpected action in create_seq_dir");
-     +		}
-     +	}
-     +	if (in_progress_error) {
-2:  dea4582591 = 2:  300d6f64f0 sequencer: rename reset_for_rollback to reset_merge
--:  ---------- > 3:  edc35f6a4c sequencer: use argv_array in reset_merge
-3:  29686d828f ! 4:  825486c22d cherry-pick/revert: add --skip option
-    @@ -11,9 +11,8 @@
-         skipping commits easier for the user and to make the commands more
-         consistent.
-     
-    -    In the next commit, we will change the advice messages and some tests
-    -    hence finishing the process of teaching revert and cherry-pick
-    -    "how to skip commits".
-    +    In the next commit, we will change the advice messages hence finishing
-    +    the process of teaching revert and cherry-pick "how to skip commits".
-     
-         Signed-off-by: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
-     
-    @@ -96,31 +95,6 @@
-      --- a/sequencer.c
-      +++ b/sequencer.c
-     @@
-    - 
-    - static int reset_merge(const struct object_id *oid)
-    - {
-    --	const char *argv[4];	/* reset --merge <arg> + NULL */
-    -+	int ret;
-    -+	struct argv_array argv = ARGV_ARRAY_INIT;
-    - 
-    --	argv[0] = "reset";
-    --	argv[1] = "--merge";
-    --	argv[2] = oid_to_hex(oid);
-    --	argv[3] = NULL;
-    --	return run_command_v_opt(argv, RUN_GIT_CMD);
-    -+	argv_array_pushl(&argv, "reset", "--merge", NULL);
-    -+
-    -+	if (!is_null_oid(oid))
-    -+		argv_array_push(&argv, oid_to_hex(oid));
-    -+
-    -+	ret = run_command_v_opt(argv.argv, RUN_GIT_CMD);
-    -+	argv_array_clear(&argv);
-    -+
-    -+	return ret;
-    - }
-    - 
-    - static int rollback_single_pick(struct repository *r)
-    -@@
-      	return reset_merge(&head_oid);
-      }
-      
-    @@ -146,48 +120,40 @@
-     +	sequencer_get_last_command(r, &action);
+1:  825486c22d ! 1:  2b16d7ea4d cherry-pick/revert: add --skip option
+    @@ -168,10 +168,14 @@
+     +	return sequencer_continue(r, opts);
      +
-     +	/*
-    -+	 * opts->action tells us which subcommand requested to skip
-    -+	 * the commit.
-    ++	 * Check whether the subcommand requested to skip the commit is actually
-    ++	 * in progress and that it's safe to skip the commit.
-    ++	 *
-    ++	 * opts->action tells us which subcommand requested to skip the commit.
-    ++	 * If the corresponding .git/<ACTION>_HEAD exists, we know that the
-    ++	 * action is in progress and we can skip the commit.
-    ++	 *
-    ++	 * Otherwise we check that the last instruction was related to the
-    ++	 * particular subcommand we're trying to execute and barf if that's not
-    ++	 * the case.
-    ++	 *
-    ++	 * Finally we check that the rollback is "safe", i.e., has the HEAD
-    ++	 * moved? In this case, it doesn't make sense to "reset the merge" and
-    ++	 * "skip the commit" as the user already handled this by committing. But
-    ++	 * we'd not want to barf here, instead give advice on how to proceed. We
-    ++	 * only need to check that when .git/<ACTION>_HEAD doesn't exist because
-    ++	 * it gets removed when the user commits, so if it still exists we're
-    ++	 * sure the user can't have committed before.
-     +	 */
-     +	switch (opts->action) {
-     +	case REPLAY_REVERT:
-    -+		/*
-    -+		 * If .git/REVERT_HEAD exists then we are sure that we are in
-    -+		 * the middle of a revert and we allow to skip the commit.
-    -+		 */
-     +		if (!file_exists(git_path_revert_head(r))) {
-    -+			/*
-    -+			 * Check if the last instruction executed was related to
-    -+			 * revert. If so, we are sure that a revert is in progress.
-    -+			 *
-    -+			 * NB: single commit revert is also counted in this
-    -+			 * definition of "progress" (and was dealt with in the
-    -+			 * previous check).
-    -+			 */
-    -+			if (action == REPLAY_REVERT) {
-    -+				/*
-    -+				 * Check if the user has moved the HEAD, i.e.,
-    -+				 * already committed. In this case, we would like
-    -+				 * to advise instead of skipping.
-    -+				 */
-    -+				if (!rollback_is_safe())
-    -+					goto give_advice;
-    -+				else
-    -+					/* skip commit :) */
-    -+					break;
-    -+			}
-    -+			return error(_("no revert in progress"));
-    ++			if (action != REPLAY_REVERT)
-    ++				return error(_("no revert in progress"));
-    ++			if (!rollback_is_safe())
-    ++				goto give_advice;
-     +		}
-     +		break;
-     +	case REPLAY_PICK:
-     +		if (!file_exists(git_path_cherry_pick_head(r))) {
-    -+			if (action == REPLAY_PICK) {
-    -+				if (!rollback_is_safe())
-    -+					goto give_advice;
-    -+				else
-    -+					break;
-    -+			}
-    -+			return error(_("no cherry-pick in progress"));
-    ++			if (action != REPLAY_PICK)
-    ++				return error(_("no cherry-pick in progress"));
-    ++			if (!rollback_is_safe())
-    ++				goto give_advice;
-     +		}
-     +		break;
-     +	default:
-4:  941e73b654 ! 5:  63dbc11ab1 cherry-pick/revert: advise using --skip
-    @@ -62,7 +62,7 @@
-     +			_("try \"git cherry-pick (--continue | %s--abort | --quit)\"");
-      			break;
-      		default:
-    - 			BUG(_("unexpected action in create_seq_dir"));
-    + 			BUG("unexpected action in create_seq_dir");
-     @@
-      	}
-      	if (in_progress_error) {
+     +give_advice:
+    -+	advise(_("have you committed already?\n"
+    -+		 "try \"git %s --continue\""),
+    -+		 action == REPLAY_REVERT ? "revert" : "cherry-pick");
+    -+	return error(_("there is nothing to skip"));
+    ++	error(_("there is nothing to skip"));
+    ++
+    ++	if (advice_resolve_conflict) {
+    ++		advise(_("have you committed already?\n"
+    ++			 "try \"git %s --continue\""),
+    ++			 action == REPLAY_REVERT ? "revert" : "cherry-pick");
+    ++	}
+    ++	return -1;
+     +}
+     +
+      static int save_todo(struct todo_list *todo_list, struct replay_opts *opts)
+    @@ -263,9 +267,9 @@
+     +test_expect_success 'check advice when we move HEAD by committing' '
+     +	pristine_detach initial &&
+     +	cat >expect <<-EOF &&
+    ++	error: there is nothing to skip
+     +	hint: have you committed already?
+     +	hint: try "git cherry-pick --continue"
+    -+	error: there is nothing to skip
+     +	fatal: cherry-pick failed
+     +	EOF
+     +	test_must_fail git cherry-pick base..yetanotherpick &&
+2:  63dbc11ab1 = 2:  8f278b5139 cherry-pick/revert: advise using --skip
 -- 
 2.21.0
 

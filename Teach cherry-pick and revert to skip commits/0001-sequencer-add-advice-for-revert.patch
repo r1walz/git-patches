@@ -1,7 +1,7 @@
 From 67c212090d51b54e409caf316d127112fa6f0148 Mon Sep 17 00:00:00 2001
 From: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
 Date: Thu, 30 May 2019 05:30:27 +0530
-Subject: [GSoC][PATCH v5 1/5] sequencer: add advice for revert
+Subject: [GSoC][PATCH v6 1/5] sequencer: add advice for revert
 
 In the case of merge conflicts, while performing a revert, we are
 currently advised to use `git cherry-pick --<sequencer-options>`

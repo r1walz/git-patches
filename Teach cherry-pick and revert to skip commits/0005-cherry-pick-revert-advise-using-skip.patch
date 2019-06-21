@@ -1,7 +1,7 @@
-From 63dbc11ab1334348bec28ba11d095d5e9c653155 Mon Sep 17 00:00:00 2001
+From 8f278b5139dbd298ae694d0d0da4ea52568602ad Mon Sep 17 00:00:00 2001
 From: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
 Date: Thu, 30 May 2019 06:07:00 +0530
-Subject: [GSoC][PATCH v5 5/5] cherry-pick/revert: advise using --skip
+Subject: [GSoC][PATCH v6 5/5] cherry-pick/revert: advise using --skip
 
 The previous commit introduced a --skip flag for cherry-pick and
 revert. Update the advice messages, to tell users about this less
@@ -44,7 +44,7 @@ index 1c9e8e2228..1f47c51bdc 100644
  static const char *color_status_slots[] = {
  	[WT_STATUS_HEADER]	  = "header",
 diff --git a/sequencer.c b/sequencer.c
-index 5720cd1c85..cc7f6219e7 100644
+index c62f7a33aa..98f3537dfc 100644
 --- a/sequencer.c
 +++ b/sequencer.c
 @@ -2655,18 +2655,20 @@ static int create_seq_dir(struct repository *r)
@@ -83,7 +83,7 @@ index 5720cd1c85..cc7f6219e7 100644
  	}
  	if (mkdir(git_path_seq_dir(), 0777) < 0)
 diff --git a/t/t3510-cherry-pick-sequence.sh b/t/t3510-cherry-pick-sequence.sh
-index dc0ac8343c..0e8adc95fc 100755
+index 20515ea37b..793bcc7fe3 100755
 --- a/t/t3510-cherry-pick-sequence.sh
 +++ b/t/t3510-cherry-pick-sequence.sh
 @@ -172,6 +172,26 @@ test_expect_success 'check advice when we move HEAD by committing' '

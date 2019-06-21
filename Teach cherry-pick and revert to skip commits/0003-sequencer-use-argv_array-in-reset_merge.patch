@@ -1,7 +1,7 @@
 From edc35f6a4c649ce8879218e33114696636557bec Mon Sep 17 00:00:00 2001
 From: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
 Date: Tue, 18 Jun 2019 18:31:26 +0530
-Subject: [GSoC][PATCH v5 3/5] sequencer: use argv_array in reset_merge
+Subject: [GSoC][PATCH v6 3/5] sequencer: use argv_array in reset_merge
 
 Avoid using magic numbers for array size and index under `reset_merge`
 function. Use `argv_array` instead. This will make code shorter and

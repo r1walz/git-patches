@@ -1,7 +1,7 @@
-From 825486c22d57ea15ae08946c11441841aa8762dd Mon Sep 17 00:00:00 2001
+From 2b16d7ea4dc57785232715b2a5934a279acd80c5 Mon Sep 17 00:00:00 2001
 From: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
 Date: Thu, 30 May 2019 05:56:02 +0530
-Subject: [GSoC][PATCH v5 4/5] cherry-pick/revert: add --skip option
+Subject: [GSoC][PATCH v6 4/5] cherry-pick/revert: add --skip option
 
 git am or rebase have a --skip flag to skip the current commit if the
 user wishes to do so. During a cherry-pick or revert a user could
@@ -21,10 +21,10 @@ Signed-off-by: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
  Documentation/git-revert.txt      |   4 +-
  Documentation/sequencer.txt       |   4 ++
  builtin/revert.c                  |   5 ++
- sequencer.c                       |  69 ++++++++++++++++++++
+ sequencer.c                       |  73 +++++++++++++++++++++
  sequencer.h                       |   1 +
  t/t3510-cherry-pick-sequence.sh   | 102 ++++++++++++++++++++++++++++++
- 7 files changed, 183 insertions(+), 6 deletions(-)
+ 7 files changed, 187 insertions(+), 6 deletions(-)
 
 diff --git a/Documentation/git-cherry-pick.txt b/Documentation/git-cherry-pick.txt
 index 754b16ce0c..83ce51aedf 100644
@@ -102,7 +102,7 @@ index d4dcedbdc6..5dc5891ea2 100644
  }
  
 diff --git a/sequencer.c b/sequencer.c
-index 6762a5f485..5720cd1c85 100644
+index 6762a5f485..c62f7a33aa 100644
 --- a/sequencer.c
 +++ b/sequencer.c
 @@ -2761,6 +2761,15 @@ static int rollback_single_pick(struct repository *r)
@@ -121,7 +121,7 @@ index 6762a5f485..5720cd1c85 100644
  int sequencer_rollback(struct repository *r, struct replay_opts *opts)
  {
  	FILE *f;
-@@ -2810,6 +2819,66 @@ int sequencer_rollback(struct repository *r, struct replay_opts *opts)
+@@ -2810,6 +2819,70 @@ int sequencer_rollback(struct repository *r, struct replay_opts *opts)
  	return -1;
  }
  
@@ -179,10 +179,14 @@ index 6762a5f485..5720cd1c85 100644
 +	return sequencer_continue(r, opts);
 +
 +give_advice:
-+	advise(_("have you committed already?\n"
-+		 "try \"git %s --continue\""),
-+		 action == REPLAY_REVERT ? "revert" : "cherry-pick");
-+	return error(_("there is nothing to skip"));
++	error(_("there is nothing to skip"));
++
++	if (advice_resolve_conflict) {
++		advise(_("have you committed already?\n"
++			 "try \"git %s --continue\""),
++			 action == REPLAY_REVERT ? "revert" : "cherry-pick");
++	}
++	return -1;
 +}
 +
  static int save_todo(struct todo_list *todo_list, struct replay_opts *opts)
@@ -201,7 +205,7 @@ index 0c494b83d4..731b9853eb 100644
  
  #define TODO_LIST_KEEP_EMPTY (1U << 0)
 diff --git a/t/t3510-cherry-pick-sequence.sh b/t/t3510-cherry-pick-sequence.sh
-index 941d5026da..dc0ac8343c 100755
+index 941d5026da..20515ea37b 100755
 --- a/t/t3510-cherry-pick-sequence.sh
 +++ b/t/t3510-cherry-pick-sequence.sh
 @@ -93,6 +93,108 @@ test_expect_success 'cherry-pick cleans up sequencer state upon success' '
@@ -274,9 +278,9 @@ index 941d5026da..dc0ac8343c 100755
 +test_expect_success 'check advice when we move HEAD by committing' '
 +	pristine_detach initial &&
 +	cat >expect <<-EOF &&
++	error: there is nothing to skip
 +	hint: have you committed already?
 +	hint: try "git cherry-pick --continue"
-+	error: there is nothing to skip
 +	fatal: cherry-pick failed
 +	EOF
 +	test_must_fail git cherry-pick base..yetanotherpick &&
