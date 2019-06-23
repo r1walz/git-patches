@@ -1,7 +1,7 @@
-From edc35f6a4c649ce8879218e33114696636557bec Mon Sep 17 00:00:00 2001
+From 569122c8616dde61913ff427f008005c1bd6b5cc Mon Sep 17 00:00:00 2001
 From: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
 Date: Tue, 18 Jun 2019 18:31:26 +0530
-Subject: [GSoC][PATCH v6 3/5] sequencer: use argv_array in reset_merge
+Subject: [GSoC][PATCH v7 4/6] sequencer: use argv_array in reset_merge
 
 Avoid using magic numbers for array size and index under `reset_merge`
 function. Use `argv_array` instead. This will make code shorter and
@@ -13,10 +13,10 @@ Signed-off-by: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
  1 file changed, 11 insertions(+), 6 deletions(-)
 
 diff --git a/sequencer.c b/sequencer.c
-index 12f2605ded..6762a5f485 100644
+index cb856bcfc3..70efe36ee8 100644
 --- a/sequencer.c
 +++ b/sequencer.c
-@@ -2733,13 +2733,18 @@ static int rollback_is_safe(void)
+@@ -2734,13 +2734,18 @@ static int rollback_is_safe(void)
  
  static int reset_merge(const struct object_id *oid)
  {

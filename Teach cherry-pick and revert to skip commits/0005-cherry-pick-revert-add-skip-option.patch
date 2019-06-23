@@ -1,7 +1,7 @@
-From 2b16d7ea4dc57785232715b2a5934a279acd80c5 Mon Sep 17 00:00:00 2001
+From 4580f0e5af15be6831b2c3fb3498fc8dca4c3eeb Mon Sep 17 00:00:00 2001
 From: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
 Date: Thu, 30 May 2019 05:56:02 +0530
-Subject: [GSoC][PATCH v6 4/5] cherry-pick/revert: add --skip option
+Subject: [GSoC][PATCH v7 5/6] cherry-pick/revert: add --skip option
 
 git am or rebase have a --skip flag to skip the current commit if the
 user wishes to do so. During a cherry-pick or revert a user could
@@ -102,10 +102,10 @@ index d4dcedbdc6..5dc5891ea2 100644
  }
  
 diff --git a/sequencer.c b/sequencer.c
-index 6762a5f485..c62f7a33aa 100644
+index 70efe36ee8..f5e3d60878 100644
 --- a/sequencer.c
 +++ b/sequencer.c
-@@ -2761,6 +2761,15 @@ static int rollback_single_pick(struct repository *r)
+@@ -2762,6 +2762,15 @@ static int rollback_single_pick(struct repository *r)
  	return reset_merge(&head_oid);
  }
  
@@ -121,7 +121,7 @@ index 6762a5f485..c62f7a33aa 100644
  int sequencer_rollback(struct repository *r, struct replay_opts *opts)
  {
  	FILE *f;
-@@ -2810,6 +2819,70 @@ int sequencer_rollback(struct repository *r, struct replay_opts *opts)
+@@ -2811,6 +2820,70 @@ int sequencer_rollback(struct repository *r, struct replay_opts *opts)
  	return -1;
  }
  
