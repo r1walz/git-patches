@@ -1,7 +1,7 @@
-From f6f21b055bbf424397a79359a296c7ca91e4f5b2 Mon Sep 17 00:00:00 2001
+From 807a344eb143f61c4631883cec0fccaf95cad816 Mon Sep 17 00:00:00 2001
 From: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
 Date: Thu, 30 May 2019 06:07:00 +0530
-Subject: [GSoC][PATCH v7 6/6] cherry-pick/revert: advise using --skip
+Subject: [GSoC][PATCH v8 5/5] cherry-pick/revert: advise using --skip
 
 The previous commit introduced a --skip flag for cherry-pick and
 revert. Update the advice messages, to tell users about this less

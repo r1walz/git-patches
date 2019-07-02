@@ -1,7 +1,7 @@
-From 4580f0e5af15be6831b2c3fb3498fc8dca4c3eeb Mon Sep 17 00:00:00 2001
+From 5d64faf5019320cc0b36d8c630e455298285c5b5 Mon Sep 17 00:00:00 2001
 From: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
 Date: Thu, 30 May 2019 05:56:02 +0530
-Subject: [GSoC][PATCH v7 5/6] cherry-pick/revert: add --skip option
+Subject: [GSoC][PATCH v8 4/5] cherry-pick/revert: add --skip option
 
 git am or rebase have a --skip flag to skip the current commit if the
 user wishes to do so. During a cherry-pick or revert a user could
