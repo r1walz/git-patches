@@ -1,0 +1,40 @@
+From dab8569504f3f3025541ee036844f72a7642311c Mon Sep 17 00:00:00 2001
+From: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
+Date: Tue, 6 Aug 2019 22:51:09 +0530
+Subject: [GSoC][PATCHl 0/6] rebase -i: support more options
+
+The previous versions of this patch series were sent here[1]. This patch
+accounts for all the suggestions mentioned there and also introduces a flag
+--ignore-date (also aliased --author-date-is-committer-date).
+
+Caveat:
+
+        The flag --ignore-date (of rebase -am) silently overrides the
+        --committer-date-is-author-date flag. This behaviour is not actually
+        documented. I've made rebase -i to replicate this behaviour anyway.
+
+Thanks
+Rohit
+
+[1]: https://public-inbox.org/git/20190712185015.20585-1-rohit.ashiwal265@gmail.com/
+
+Rohit Ashiwal (6):
+  rebase -i: add --ignore-whitespace flag
+  sequencer: add NULL checks under read_author_script
+  rebase -i: support --committer-date-is-author-date
+  sequencer: rename amend_author to author_to_rename
+  rebase -i: support --ignore-date
+  rebase: add --author-date-is-committer-date
+
+ Documentation/git-rebase.txt            |  23 +++--
+ builtin/rebase.c                        |  59 +++++++++---
+ sequencer.c                             | 114 ++++++++++++++++++++++--
+ sequencer.h                             |   2 +
+ t/t3422-rebase-incompatible-options.sh  |   2 -
+ t/t3433-rebase-options-compatibility.sh | 100 +++++++++++++++++++++
+ 6 files changed, 271 insertions(+), 29 deletions(-)
+ create mode 100755 t/t3433-rebase-options-compatibility.sh
+
+-- 
+2.21.0
+
