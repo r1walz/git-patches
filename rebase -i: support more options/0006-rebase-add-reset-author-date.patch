@@ -1,7 +1,7 @@
-From cb81e6c4e5de3dca980d9434138c035b943aea0a Mon Sep 17 00:00:00 2001
+From 210d15cca0e3c2ca838aa0ac5e506bffa7ed5c52 Mon Sep 17 00:00:00 2001
 From: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
 Date: Mon, 5 Aug 2019 20:11:00 +0530
-Subject: [GSoC][PATCH v2 6/6] rebase: add --author-date-is-committer-date
+Subject: [PATCH v3 6/6] rebase: add --reset-author-date
 
 The previous commit introduced --ignore-date flag to interactive
 rebase, but the name is actually very vague in context of rebase -i
@@ -15,26 +15,26 @@ Signed-off-by: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
  2 files changed, 3 insertions(+)
 
 diff --git a/Documentation/git-rebase.txt b/Documentation/git-rebase.txt
-index 24ad2dda0b..6a52d721e2 100644
+index e7ac9fae0b..ec62ba36b8 100644
 --- a/Documentation/git-rebase.txt
 +++ b/Documentation/git-rebase.txt
-@@ -388,6 +388,7 @@ See also INCOMPATIBLE OPTIONS below.
+@@ -391,6 +391,7 @@ See also INCOMPATIBLE OPTIONS below.
  	as the committer date. This implies --force-rebase.
  
  --ignore-date::
-+--author-date-is-committer-date::
- 	Instead of using the given author date, re-set it to the value
- 	same as committer (current) date. This implies --force-rebase.
++--reset-author-date::
+ 	Instead of using the given author date, reset it to the value
+ 	same as the current time. This implies --force-rebase.
  +
 diff --git a/builtin/rebase.c b/builtin/rebase.c
-index ed58ca8e5a..19b1fc0f3a 100644
+index a63531ee90..dcf758845b 100644
 --- a/builtin/rebase.c
 +++ b/builtin/rebase.c
-@@ -1442,6 +1442,8 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)
+@@ -1431,6 +1431,8 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)
  		OPT_BOOL(0, "committer-date-is-author-date",
  			 &options.committer_date_is_author_date,
  			 N_("make committer date match author date")),
-+		OPT_BOOL(0, "author-date-is-committer-date", &options.ignore_date,
++		OPT_BOOL(0, "reset-author-date", &options.ignore_date,
 +			 "ignore author date and use current date"),
  		OPT_BOOL(0, "ignore-date", &options.ignore_date,
  			 "ignore author date and use current date"),

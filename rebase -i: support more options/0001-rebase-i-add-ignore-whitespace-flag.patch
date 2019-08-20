@@ -1,7 +1,7 @@
-From 4cd0aa3084d5ca2879118d5f20e44c3630abe17f Mon Sep 17 00:00:00 2001
+From e82ed8cad558c03bb92e95e4818d73cde869a265 Mon Sep 17 00:00:00 2001
 From: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
 Date: Sat, 13 Jul 2019 00:20:15 +0530
-Subject: [GSoC][PATCH v2 1/6] rebase -i: add --ignore-whitespace flag
+Subject: [PATCH v3 1/6] rebase -i: add --ignore-whitespace flag
 
 There are two backends available for rebasing, viz, the am and the
 interactive. Naturally, there shall be some features that are
@@ -13,25 +13,28 @@ translating it to -Xignore-space-change.
 
 Signed-off-by: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
 ---
- Documentation/git-rebase.txt            | 10 +++-
- builtin/rebase.c                        | 29 +++++++++--
+ Documentation/git-rebase.txt            | 13 ++++-
+ builtin/rebase.c                        | 22 +++++++--
  t/t3422-rebase-incompatible-options.sh  |  1 -
  t/t3433-rebase-options-compatibility.sh | 65 +++++++++++++++++++++++++
- 4 files changed, 97 insertions(+), 8 deletions(-)
+ 4 files changed, 94 insertions(+), 7 deletions(-)
  create mode 100755 t/t3433-rebase-options-compatibility.sh
 
 diff --git a/Documentation/git-rebase.txt b/Documentation/git-rebase.txt
-index 6156609cf7..28e5e08a83 100644
+index 6156609cf7..873eb5768c 100644
 --- a/Documentation/git-rebase.txt
 +++ b/Documentation/git-rebase.txt
-@@ -371,8 +371,13 @@ If either <upstream> or --root is given on the command line, then the
+@@ -371,8 +371,16 @@ If either <upstream> or --root is given on the command line, then the
  default is `--no-fork-point`, otherwise the default is `--fork-point`.
  
  --ignore-whitespace::
-+	This flag is either passed to the 'git apply' program
-+	(see linkgit:git-apply[1]), or to 'git merge' program
-+	(see linkgit:git-merge[1]) as `-Xignore-space-change`,
-+	depending on which backend is selected by other options.
++	Behaves differently depending on which backend is selected.
+++
++'am' backend: When applying a patch, ignore changes in whitespace in
++context lines if necessary.
+++
++'interactive' backend: Treat lines with only whitespace changes as
++unchanged for the sake of a three-way merge.
 +
  --whitespace=<option>::
 -	These flag are passed to the 'git apply' program
@@ -39,7 +42,7 @@ index 6156609cf7..28e5e08a83 100644
  	(see linkgit:git-apply[1]) that applies the patch.
  +
  See also INCOMPATIBLE OPTIONS below.
-@@ -520,7 +525,6 @@ The following options:
+@@ -520,7 +528,6 @@ The following options:
   * --committer-date-is-author-date
   * --ignore-date
   * --whitespace
@@ -47,7 +50,7 @@ index 6156609cf7..28e5e08a83 100644
   * -C
  
  are incompatible with the following options:
-@@ -543,6 +547,8 @@ In addition, the following pairs of options are incompatible:
+@@ -543,6 +550,8 @@ In addition, the following pairs of options are incompatible:
   * --preserve-merges and --interactive
   * --preserve-merges and --signoff
   * --preserve-merges and --rebase-merges
@@ -57,7 +60,7 @@ index 6156609cf7..28e5e08a83 100644
   * --rebase-merges and --strategy-option
  
 diff --git a/builtin/rebase.c b/builtin/rebase.c
-index 670096c065..ab1bbb78ee 100644
+index 670096c065..f8a618d54c 100644
 --- a/builtin/rebase.c
 +++ b/builtin/rebase.c
 @@ -79,6 +79,7 @@ struct rebase_options {
@@ -72,33 +75,28 @@ index 670096c065..ab1bbb78ee 100644
  
  static struct replay_opts get_replay_opts(const struct rebase_options *opts)
  {
-+	char *strategy_opts = opts->strategy_opts;
++	struct strbuf strategy_buf = STRBUF_INIT;
  	struct replay_opts replay = REPLAY_OPTS_INIT;
  
  	replay.action = REPLAY_INTERACTIVE_REBASE;
-@@ -114,8 +116,19 @@ static struct replay_opts get_replay_opts(const struct rebase_options *opts)
+@@ -114,9 +116,15 @@ static struct replay_opts get_replay_opts(const struct rebase_options *opts)
  	replay.reschedule_failed_exec = opts->reschedule_failed_exec;
  	replay.gpg_sign = xstrdup_or_null(opts->gpg_sign_opt);
  	replay.strategy = opts->strategy;
--	if (opts->strategy_opts)
++
+ 	if (opts->strategy_opts)
 -		parse_strategy_opts(&replay, opts->strategy_opts);
-+
-+	if (opts->ignore_whitespace) {
-+		struct strbuf buf = STRBUF_INIT;
-+
-+		if (strategy_opts)
-+			strbuf_addstr(&buf, strategy_opts);
-+
-+		strbuf_addstr(&buf, " --ignore-space-change");
-+		free(strategy_opts);
-+		strategy_opts = strbuf_detach(&buf, NULL);
-+	}
-+	if (strategy_opts)
-+		parse_strategy_opts(&replay, strategy_opts);
++		strbuf_addstr(&strategy_buf, opts->strategy_opts);
++	if (opts->ignore_whitespace)
++		strbuf_addstr(&strategy_buf, " --ignore-space-change");
++	if (strategy_buf.len)
++		parse_strategy_opts(&replay, strategy_buf.buf);
  
++	strbuf_release(&strategy_buf);
  	return replay;
  }
-@@ -511,6 +524,8 @@ int cmd_rebase__interactive(int argc, const char **argv, const char *prefix)
+ 
+@@ -511,6 +519,8 @@ int cmd_rebase__interactive(int argc, const char **argv, const char *prefix)
  	argc = parse_options(argc, argv, prefix, options,
  			builtin_rebase_interactive_usage, PARSE_OPT_KEEP_ARGV0);
  
@@ -107,7 +105,7 @@ index 670096c065..ab1bbb78ee 100644
  	if (!is_null_oid(&squash_onto))
  		opts.squash_onto = &squash_onto;
  
-@@ -964,6 +979,8 @@ static int run_am(struct rebase_options *opts)
+@@ -964,6 +974,8 @@ static int run_am(struct rebase_options *opts)
  	am.git_cmd = 1;
  	argv_array_push(&am.args, "am");
  
@@ -116,7 +114,7 @@ index 670096c065..ab1bbb78ee 100644
  	if (opts->action && !strcmp("continue", opts->action)) {
  		argv_array_push(&am.args, "--resolved");
  		argv_array_pushf(&am.args, "--resolvemsg=%s", resolvemsg);
-@@ -1407,9 +1424,6 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)
+@@ -1407,9 +1419,6 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)
  			PARSE_OPT_NOARG, NULL, REBASE_DIFFSTAT },
  		OPT_BOOL(0, "signoff", &options.signoff,
  			 N_("add a Signed-off-by: line to each commit")),
@@ -126,7 +124,7 @@ index 670096c065..ab1bbb78ee 100644
  		OPT_PASSTHRU_ARGV(0, "committer-date-is-author-date",
  				  &options.git_am_opts, NULL,
  				  N_("passed to 'git am'"), PARSE_OPT_NOARG),
-@@ -1417,6 +1431,8 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)
+@@ -1417,6 +1426,8 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)
  				  N_("passed to 'git am'"), PARSE_OPT_NOARG),
  		OPT_PASSTHRU_ARGV('C', NULL, &options.git_am_opts, N_("n"),
  				  N_("passed to 'git apply'"), 0),
@@ -135,7 +133,7 @@ index 670096c065..ab1bbb78ee 100644
  		OPT_PASSTHRU_ARGV(0, "whitespace", &options.git_am_opts,
  				  N_("action"), N_("passed to 'git apply'"), 0),
  		OPT_BIT('f', "force-rebase", &options.flags,
-@@ -1834,6 +1850,9 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)
+@@ -1834,6 +1845,9 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)
  	}
  
  	if (options.rebase_merges) {

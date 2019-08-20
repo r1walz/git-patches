@@ -1,8 +1,7 @@
-From e2c0304587cc8d7fc20120506e912406551edb6b Mon Sep 17 00:00:00 2001
+From 209057b361c196b061e27a2d692110c2774794d1 Mon Sep 17 00:00:00 2001
 From: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
 Date: Sat, 13 Jul 2019 00:23:56 +0530
-Subject: [GSoC][PATCH v2 2/6] sequencer: add NULL checks under
- read_author_script
+Subject: [PATCH v3 2/6] sequencer: add NULL checks under read_author_script
 
 read_author_script reads name, email and author date from the author
 script. However, it does not check if the arguments are NULL. Adding
