@@ -1,7 +1,7 @@
-From d7b9054a6ebcb3d130ad64b19966f8b72a187eff Mon Sep 17 00:00:00 2001
+From e2c0304587cc8d7fc20120506e912406551edb6b Mon Sep 17 00:00:00 2001
 From: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
 Date: Sat, 13 Jul 2019 00:23:56 +0530
-Subject: [GSoC][PATCHl 2/6] sequencer: add NULL checks under
+Subject: [GSoC][PATCH v2 2/6] sequencer: add NULL checks under
  read_author_script
 
 read_author_script reads name, email and author date from the author
@@ -23,10 +23,10 @@ Signed-off-by: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
  1 file changed, 13 insertions(+), 3 deletions(-)
 
 diff --git a/sequencer.c b/sequencer.c
-index f88a97fb10..a2d7b0925e 100644
+index 34ebf8ed94..30d77c2682 100644
 --- a/sequencer.c
 +++ b/sequencer.c
-@@ -821,9 +821,19 @@ int read_author_script(const char *path, char **name, char **email, char **date,
+@@ -824,9 +824,19 @@ int read_author_script(const char *path, char **name, char **email, char **date,
  		error(_("missing 'GIT_AUTHOR_DATE'"));
  	if (date_i < 0 || email_i < 0 || date_i < 0 || err)
  		goto finish;

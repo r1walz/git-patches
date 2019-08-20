@@ -1,7 +1,7 @@
-From dab8569504f3f3025541ee036844f72a7642311c Mon Sep 17 00:00:00 2001
+From cb81e6c4e5de3dca980d9434138c035b943aea0a Mon Sep 17 00:00:00 2001
 From: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
 Date: Mon, 5 Aug 2019 20:11:00 +0530
-Subject: [GSoC][PATCHl 6/6] rebase: add --author-date-is-committer-date
+Subject: [GSoC][PATCH v2 6/6] rebase: add --author-date-is-committer-date
 
 The previous commit introduced --ignore-date flag to interactive
 rebase, but the name is actually very vague in context of rebase -i
@@ -15,7 +15,7 @@ Signed-off-by: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
  2 files changed, 3 insertions(+)
 
 diff --git a/Documentation/git-rebase.txt b/Documentation/git-rebase.txt
-index a5cdf8518b..bb60426911 100644
+index 24ad2dda0b..6a52d721e2 100644
 --- a/Documentation/git-rebase.txt
 +++ b/Documentation/git-rebase.txt
 @@ -388,6 +388,7 @@ See also INCOMPATIBLE OPTIONS below.
@@ -23,14 +23,14 @@ index a5cdf8518b..bb60426911 100644
  
  --ignore-date::
 +--author-date-is-committer-date::
- 	Lie about the author date by re-setting it to the value
+ 	Instead of using the given author date, re-set it to the value
  	same as committer (current) date. This implies --force-rebase.
  +
 diff --git a/builtin/rebase.c b/builtin/rebase.c
-index 7f464fc9ba..a9a42f9ee4 100644
+index ed58ca8e5a..19b1fc0f3a 100644
 --- a/builtin/rebase.c
 +++ b/builtin/rebase.c
-@@ -1433,6 +1433,8 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)
+@@ -1442,6 +1442,8 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)
  		OPT_BOOL(0, "committer-date-is-author-date",
  			 &options.committer_date_is_author_date,
  			 N_("make committer date match author date")),
