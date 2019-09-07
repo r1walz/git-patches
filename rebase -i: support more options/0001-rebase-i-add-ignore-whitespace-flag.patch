@@ -1,7 +1,7 @@
-From e82ed8cad558c03bb92e95e4818d73cde869a265 Mon Sep 17 00:00:00 2001
+From 77af1d66db570a899a1d63789cebeaf0492f77cb Mon Sep 17 00:00:00 2001
 From: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
 Date: Sat, 13 Jul 2019 00:20:15 +0530
-Subject: [PATCH v3 1/6] rebase -i: add --ignore-whitespace flag
+Subject: [PATCH v4 1/6] rebase -i: add --ignore-whitespace flag
 
 There are two backends available for rebasing, viz, the am and the
 interactive. Naturally, there shall be some features that are

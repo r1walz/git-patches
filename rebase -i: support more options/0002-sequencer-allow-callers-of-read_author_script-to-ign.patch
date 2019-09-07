@@ -1,20 +1,16 @@
-From 209057b361c196b061e27a2d692110c2774794d1 Mon Sep 17 00:00:00 2001
+From 1f7f1407b2678501d1becf55b524503c00ed29ac Mon Sep 17 00:00:00 2001
 From: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
 Date: Sat, 13 Jul 2019 00:23:56 +0530
-Subject: [PATCH v3 2/6] sequencer: add NULL checks under read_author_script
+Subject: [PATCH v4 2/6] sequencer: allow callers of read_author_script() to
+ ignore fields
 
-read_author_script reads name, email and author date from the author
-script. However, it does not check if the arguments are NULL. Adding
-NULL checks will allow us to selectively get the required value, for
-example:
+The current callers of the read_author_script() function read name,
+email and date from the author script.  Allow callers to signal that
+they are not interested in some among these three fields by passing
+NULL.
 
-    char *date;
-    if (read_author_script(_path_, NULL, NULL, &date, _int_))
-	    die(_("failed to read author date"));
-    /* needs to be free()'d */
-    return date;
-
-Add NULL checks for better control over the information retrieved.
+Note that fields that are ignored still must exist and be formatted
+correctly in the author script.
 
 Signed-off-by: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
 ---
@@ -22,7 +18,7 @@ Signed-off-by: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
  1 file changed, 13 insertions(+), 3 deletions(-)
 
 diff --git a/sequencer.c b/sequencer.c
-index 34ebf8ed94..30d77c2682 100644
+index e55550510a..adeff2561e 100644
 --- a/sequencer.c
 +++ b/sequencer.c
 @@ -824,9 +824,19 @@ int read_author_script(const char *path, char **name, char **email, char **date,

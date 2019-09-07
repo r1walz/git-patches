@@ -1,7 +1,7 @@
-From 210d15cca0e3c2ca838aa0ac5e506bffa7ed5c52 Mon Sep 17 00:00:00 2001
+From 396d5f16eb37d7178fcf574d9185051672ae7bfa Mon Sep 17 00:00:00 2001
 From: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
 Date: Mon, 5 Aug 2019 20:11:00 +0530
-Subject: [PATCH v3 6/6] rebase: add --reset-author-date
+Subject: [PATCH v4 6/6] rebase: add --reset-author-date
 
 The previous commit introduced --ignore-date flag to interactive
 rebase, but the name is actually very vague in context of rebase -i
@@ -27,7 +27,7 @@ index e7ac9fae0b..ec62ba36b8 100644
  	same as the current time. This implies --force-rebase.
  +
 diff --git a/builtin/rebase.c b/builtin/rebase.c
-index a63531ee90..dcf758845b 100644
+index e6f90f61dd..57e411dd59 100644
 --- a/builtin/rebase.c
 +++ b/builtin/rebase.c
 @@ -1431,6 +1431,8 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)

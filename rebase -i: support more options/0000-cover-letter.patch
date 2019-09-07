@@ -1,275 +1,329 @@
-From 210d15cca0e3c2ca838aa0ac5e506bffa7ed5c52 Mon Sep 17 00:00:00 2001
+From 396d5f16eb37d7178fcf574d9185051672ae7bfa Mon Sep 17 00:00:00 2001
 From: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
-Date: Tue, 20 Aug 2019 08:45:19 +0530
-Subject: [PATCH v3 0/6] rebase -i: support more options
+Date: Sat, 7 Sep 2019 16:50:55 +0530
+Subject: [PATCH v4 0/6] rebase -i: support more options
 
-I've tries to incorporated all the suggestions.
+Following the suggestion of Phillip I've rebased my patch on master (745f681289)
+and cherry-picking b0a3186140.
 
-Some points:
-  - According to v2.0.0's git-am.sh, ignore-date should override
-    committer-date-is-author-date. Ergo, we are not barfing out
-    when both flags are provided.
-  - Should the 'const' qualifier be removed[2]? Since it is leaving
-    a false impression that author should not be free()'d.
+Base: 745f6812895b31c02b29bdfe4ae8e5498f776c26
+      with cherry-picked b0a3186140dbc7bd64cbc6ef733386a0f1eb6a4d
 
-[1]: git show v2.0.0:git-am.sh
-[2]: https://github.com/git/git/blob/v2.23.0/sequencer.c#L959
+Outline:
+  2/6:
+      - Change commit message and description
+  3/6:
+      - add test for rebase -r
+      - add strict bounds while pushing ident date
+  5/6:
+      - bug fix: (following am's code) if --ignore-date is provided,
+                 we should setenv GIT_COMMITTER_DATE to "".
+      - catch error when ident line is malformed
+      - push GIT_AUTHOR_DATE instead of providing it with --date so
+        that "git merge" can also use push_dates function
+      - add test for rebase -r
+
 
 Rohit Ashiwal (6):
   rebase -i: add --ignore-whitespace flag
-  sequencer: add NULL checks under read_author_script
+  sequencer: allow callers of read_author_script() to ignore fields
   rebase -i: support --committer-date-is-author-date
   sequencer: rename amend_author to author_to_rename
   rebase -i: support --ignore-date
   rebase: add --reset-author-date
 
  Documentation/git-rebase.txt            |  26 +++--
- builtin/rebase.c                        |  53 +++++++---
- sequencer.c                             | 135 ++++++++++++++++++++++--
+ builtin/rebase.c                        |  55 +++++++---
+ sequencer.c                             | 134 +++++++++++++++++++++--
  sequencer.h                             |   2 +
  t/t3422-rebase-incompatible-options.sh  |   2 -
- t/t3433-rebase-options-compatibility.sh | 100 ++++++++++++++++++
- 6 files changed, 289 insertions(+), 29 deletions(-)
+ t/t3433-rebase-options-compatibility.sh | 137 ++++++++++++++++++++++++
+ 6 files changed, 328 insertions(+), 28 deletions(-)
  create mode 100755 t/t3433-rebase-options-compatibility.sh
 
 Range-diff:
-1:  4cd0aa3084 ! 1:  e82ed8cad5 rebase -i: add --ignore-whitespace flag
-    @@ -19,10 +19,13 @@
-      default is `--no-fork-point`, otherwise the default is `--fork-point`.
-      
-      --ignore-whitespace::
-    -+	This flag is either passed to the 'git apply' program
-    -+	(see linkgit:git-apply[1]), or to 'git merge' program
-    -+	(see linkgit:git-merge[1]) as `-Xignore-space-change`,
-    -+	depending on which backend is selected by other options.
-    ++	Behaves differently depending on which backend is selected.
-    +++
-    ++'am' backend: When applying a patch, ignore changes in whitespace in
-    ++context lines if necessary.
-    +++
-    ++'interactive' backend: Treat lines with only whitespace changes as
-    ++unchanged for the sake of a three-way merge.
+--- snip ---
+ 1:  e82ed8cad5 = 49:  77af1d66db rebase -i: add --ignore-whitespace flag
+ 2:  209057b361 ! 50:  1f7f1407b2 sequencer: add NULL checks under read_author_script
+    @@ -1,19 +1,14 @@
+     Author: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
+     
+    -    sequencer: add NULL checks under read_author_script
+    +    sequencer: allow callers of read_author_script() to ignore fields
+     
+    -    read_author_script reads name, email and author date from the author
+    -    script. However, it does not check if the arguments are NULL. Adding
+    -    NULL checks will allow us to selectively get the required value, for
+    -    example:
+    +    The current callers of the read_author_script() function read name,
+    +    email and date from the author script.  Allow callers to signal that
+    +    they are not interested in some among these three fields by passing
+    +    NULL.
+     
+    -        char *date;
+    -        if (read_author_script(_path_, NULL, NULL, &date, _int_))
+    -                die(_("failed to read author date"));
+    -        /* needs to be free()'d */
+    -        return date;
+    -
+    -    Add NULL checks for better control over the information retrieved.
+    +    Note that fields that are ignored still must exist and be formatted
+    +    correctly in the author script.
+     
+         Signed-off-by: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
+     
+ 3:  a4e6644ef8 ! 51:  cc1614154e rebase -i: support --committer-date-is-author-date
+    @@ -128,35 +128,34 @@
+     +	return date;
+     +}
      +
-      --whitespace=<option>::
-     -	These flag are passed to the 'git apply' program
-    @@ -63,7 +66,7 @@
+    - /* Read author-script and return an ident line (author <email> timestamp) */
+    - static const char *read_author_ident(struct strbuf *buf)
+    - {
+    + static const char staged_changes_advice[] =
+    + N_("you have staged changes in your working tree\n"
+    + "If these changes are meant to be squashed into the previous commit, run:\n"
+     @@
+    - {
+    - 	struct child_process cmd = CHILD_PROCESS_INIT;
       
-      static struct replay_opts get_replay_opts(const struct rebase_options *opts)
-      {
-    -+	char *strategy_opts = opts->strategy_opts;
-    ++	struct strbuf strategy_buf = STRBUF_INIT;
-      	struct replay_opts replay = REPLAY_OPTS_INIT;
-      
-      	replay.action = REPLAY_INTERACTIVE_REBASE;
-    @@ -71,24 +74,19 @@
-      	replay.reschedule_failed_exec = opts->reschedule_failed_exec;
-      	replay.gpg_sign = xstrdup_or_null(opts->gpg_sign_opt);
-      	replay.strategy = opts->strategy;
-    --	if (opts->strategy_opts)
-    --		parse_strategy_opts(&replay, opts->strategy_opts);
-    -+
-    -+	if (opts->ignore_whitespace) {
-    -+		struct strbuf buf = STRBUF_INIT;
-    -+
-    -+		if (strategy_opts)
-    -+			strbuf_addstr(&buf, strategy_opts);
+    -+	if (opts->committer_date_is_author_date) {
+    -+		size_t len;
+    -+		int res = -1;
+    -+		struct strbuf datebuf = STRBUF_INIT;
+    -+		char *date = read_author_date_or_null();
+    + 	cmd.git_cmd = 1;
+    + 
+    ++        if (opts->committer_date_is_author_date) {
+    ++	        int res = -1;
+    ++	        struct strbuf datebuf = STRBUF_INIT;
+    ++	        char *date = read_author_date_or_null();
      +
-    -+		strbuf_addstr(&buf, " --ignore-space-change");
-    -+		free(strategy_opts);
-    -+		strategy_opts = strbuf_detach(&buf, NULL);
+    -+		if (!date)
+    -+			return -1;
+    ++	        if (!date)
+    ++	                return -1;
+     +
+    -+		strbuf_addf(&datebuf, "@%s", date);
+    -+		free(date);
+    ++	        strbuf_addf(&datebuf, "@%s", date);
+    ++	        res = setenv("GIT_COMMITTER_DATE", datebuf.buf, 1);
+     +
+    -+		date = strbuf_detach(&datebuf, &len);
+    -+		res = setenv("GIT_COMMITTER_DATE", date, 1);
+    -+		free(date);
+    ++		strbuf_release(&datebuf);
+    ++	        free(date);
+     +
+    -+		if (res)
+    -+			return -1;
     -+	}
-    -+	if (strategy_opts)
-    -+		parse_strategy_opts(&replay, strategy_opts);
-    + 	if (opts->strategy_opts)
-    +-		parse_strategy_opts(&replay, opts->strategy_opts);
-    ++		strbuf_addstr(&strategy_buf, opts->strategy_opts);
-    ++	if (opts->ignore_whitespace)
-    ++		strbuf_addstr(&strategy_buf, " --ignore-space-change");
-    ++	if (strategy_buf.len)
-    ++		parse_strategy_opts(&replay, strategy_buf.buf);
-      
-    ++	strbuf_release(&strategy_buf);
-      	return replay;
-      }
-    + 
-     @@
-      	argc = parse_options(argc, argv, prefix, options,
-      			builtin_rebase_interactive_usage, PARSE_OPT_KEEP_ARGV0);
-2:  e2c0304587 = 2:  209057b361 sequencer: add NULL checks under read_author_script
-3:  6aed57ae2e ! 3:  a4e6644ef8 rebase -i: support --committer-date-is-author-date
-    @@ -21,10 +21,12 @@
-     +
-      --ignore-date::
-     -	These flags are passed to 'git am' to easily change the dates
-    +-	of the rebased commits (see linkgit:git-am[1]).
-     +	This flag is passed to 'git am' to change the author date
-    - 	of the rebased commits (see linkgit:git-am[1]).
-    ++	of each rebased commit (see linkgit:git-am[1]).
-      +
-      See also INCOMPATIBLE OPTIONS below.
-    + 
-     @@
-      
-      The following options:
-    @@ -62,16 +64,6 @@
-      	replay.gpg_sign = xstrdup_or_null(opts->gpg_sign_opt);
-      	replay.strategy = opts->strategy;
-      
-    -@@
-    - 		warning(_("--[no-]rebase-cousins has no effect without "
-    - 			  "--rebase-merges"));
-    - 
-    -+	if (opts.committer_date_is_author_date)
-    -+		opts.flags |= REBASE_FORCE;
-    -+
-    - 	return !!run_rebase_interactive(&opts, command);
-    - }
-    - 
-     @@
-      
-      	if (opts->ignore_whitespace)
-    @@ -149,14 +141,14 @@
-     +		struct strbuf datebuf = STRBUF_INIT;
-     +		char *date = read_author_date_or_null();
-     +
-    ++		if (!date)
-    ++			return -1;
+    - 	if ((flags & CREATE_ROOT_COMMIT) && !(flags & AMEND_MSG)) {
+    - 		struct strbuf msg = STRBUF_INIT, script = STRBUF_INIT;
+    - 		const char *author = NULL;
+    ++	        if (res)
+    ++	                return -1;
+    ++        }
     ++
-     +		strbuf_addf(&datebuf, "@%s", date);
-     +		free(date);
+    + 	if (is_rebase_i(opts) && read_env_script(&cmd.env_array)) {
+    + 		const char *gpg_opt = gpg_sign_opt_quoted(opts);
+    + 
+     @@
+      
+      	if (parse_head(r, &current_head))
+    @@ -174,14 +173,19 @@
+     +		struct ident_split ident;
+     +		struct strbuf date = STRBUF_INIT;
      +
-     +		date = strbuf_detach(&datebuf, &len);
+    -+		split_ident_line(&ident, author, len);
     -+
-    -+		if (len > 1)
-    -+			res = setenv("GIT_COMMITTER_DATE", date, 1);
-    -+
-    ++		res = setenv("GIT_COMMITTER_DATE", date, 1);
-     +		free(date);
-     +
-     +		if (res)
-    @@ -187,7 +179,7 @@
+    ++		if (split_ident_line(&ident, author, len) < 0)
+    ++			return error(_("malformed ident line"));
      +		if (!ident.date_begin)
      +			return error(_("corrupted author without date information"));
      +
-    -+		strbuf_addf(&date, "@%s",ident.date_begin);
-    ++		strbuf_addf(&date, "@%s", ident.date_begin);
-     +		setenv("GIT_COMMITTER_DATE", date.buf, 1);
+    -+		strbuf_addf(&date, "@%s", ident.date_begin);
+    -+		setenv("GIT_COMMITTER_DATE", date.buf, 1);
+    ++		strbuf_addf(&date, "@%.*s %.*s",
+    ++			    (int)(ident.date_end - ident.date_begin), ident.date_begin,
+    ++			    (int)(ident.tz_end - ident.tz_begin), ident.tz_begin);
+    ++		res = setenv("GIT_COMMITTER_DATE", date.buf, 1);
      +		strbuf_release(&date);
+    ++
+    ++		if (res)
+    ++			goto out;
      +	}
-4:  36a0c017c2 = 4:  6ac1885c54 sequencer: rename amend_author to author_to_rename
-5:  3a4ffeb995 ! 5:  a69749dd67 rebase -i: support --ignore-date
-    @@ -16,9 +16,9 @@
-      
-      --ignore-date::
-     -	This flag is passed to 'git am' to change the author date
-    --	of the rebased commits (see linkgit:git-am[1]).
-    -+	Instead of using the given author date, re-set it to the value
-    -+	same as committer (current) date. This implies --force-rebase.
-    +-	of each rebased commit (see linkgit:git-am[1]).
-    ++	Instead of using the given author date, reset it to the value
-    ++	same as the current time. This implies --force-rebase.
-      +
-      See also INCOMPATIBLE OPTIONS below.
-      
-    @@ -58,18 +58,6 @@
-      	replay.gpg_sign = xstrdup_or_null(opts->gpg_sign_opt);
-      	replay.strategy = opts->strategy;
-      
-    -@@
-    - 		warning(_("--[no-]rebase-cousins has no effect without "
-    - 			  "--rebase-merges"));
-    - 
-    --	if (opts.committer_date_is_author_date)
-    -+	if (opts.ignore_date)
-    -+		opts.committer_date_is_author_date = 0;
-    -+	if (opts.committer_date_is_author_date ||
-    -+	    opts.ignore_date)
-    - 		opts.flags |= REBASE_FORCE;
-    - 
-    - 	return !!run_rebase_interactive(&opts, command);
+     +
+      	if (write_index_as_tree(&tree, r->index, r->index_file, 0, NULL)) {
+    @@ -256,6 +260,20 @@
+      # This is a special case in which both am and interactive backends
+      # provide the same output. It was done intentionally because
+      # both the backends fall short of optimal behaviour.
+    +@@
+    + 	EOF
+    + 	git commit -am "update file" &&
+    + 	git tag side &&
+    ++	test_commit commit1 foo foo1 &&
+    ++	test_commit commit2 foo foo2 &&
+    ++	test_commit commit3 foo foo3 &&
+    + 
+    + 	git checkout --orphan master &&
+    ++	git rm --cached foo &&
+    ++	rm foo &&
+    + 	sed -e "s/^|//" >file <<-\EOF &&
+    + 	|line 1
+    + 	|        line 2
      @@
-      		argv_array_push(&am.args, "--ignore-whitespace");
-      	if (opts->committer_date_is_author_date)
-    @@ -125,18 +113,19 @@
-      	return buf->buf;
+      	test_cmp expect file
+      '
+    @@ -275,5 +293,18 @@
+     +	git show HEAD --pretty="format:%ci" >committertime &&
+     +	test_cmp authortime committertime
+     +'
+    ++
+    ++test_expect_success '--committer-date-is-author-date works with rebase -r' '
+    ++	git checkout side &&
+    ++	git merge commit3 &&
+    ++	git rebase -r --root --committer-date-is-author-date &&
+    ++	git rev-list HEAD >rev_list &&
+    ++	while read HASH
+    ++	do
+    ++		git show $HASH --pretty="format:%ai" >authortime
+    ++		git show $HASH --pretty="format:%ci" >committertime
+    ++		test_cmp authortime committertime
+    ++	done <rev_list
+    ++'
+     +
+      test_done
+ 4:  6ac1885c54 = 52:  9e92c79bda sequencer: rename amend_author to author_to_rename
+ 5:  a69749dd67 ! 53:  fc68e55e78 rebase -i: support --ignore-date
+    @@ -83,8 +83,10 @@
+      	}
+      
+     -	if (options.committer_date_is_author_date)
+    -+	if (options.ignore_date)
+    ++	if (options.ignore_date) {
+     +		options.committer_date_is_author_date = 0;
+    ++		setenv("GIT_COMMITTER_DATE", "", 1);
+    ++	}
+     +	if (options.committer_date_is_author_date ||
+     +	    options.ignore_date)
+      		options.flags |= REBASE_FORCE;
+    @@ -110,7 +112,7 @@
+      static GIT_PATH_FUNC(rebase_path_verbose, "rebase-merge/verbose")
+      static GIT_PATH_FUNC(rebase_path_quiet, "rebase-merge/quiet")
+     @@
+    - 	return buf->buf;
+    + 	return date;
       }
       
-    -+static void ignore_author_date(const char **author)
-    ++/* Construct a free()able author string with current time as the author date */
-    ++static char *ignore_author_date(const char *author)
-     +{
-    -+	int len = strlen(*author);
-    ++	int len = strlen(author);
+     +/* Construct a free()able author string with current time as the author date */
+    @@ -120,7 +122,10 @@
      +	struct ident_split ident;
      +	struct strbuf new_author = STRBUF_INIT;
      +
-    -+	split_ident_line(&ident, *author, len);
-    ++	split_ident_line(&ident, author, len);
+    -+	split_ident_line(&ident, author, len);
+    ++	if (split_ident_line(&ident, author, len) < 0) {
+    ++		error(_("malformed ident line"));
+    ++		return NULL;
+    ++	}
      +	len = ident.mail_end - ident.name_begin + 1;
      +
-    -+	strbuf_addf(&new_author, "%.*s", len, *author);
-    ++	strbuf_addf(&new_author, "%.*s ", len, author);
-     +	datestamp(&new_author);
-    -+	*author = strbuf_detach(&new_author, NULL);
-    ++	return strbuf_detach(&new_author, NULL);
-     +}
+     +	strbuf_addf(&new_author, "%.*s ", len, author);
+    @@ -134,7 +139,7 @@
+     +	struct strbuf date = STRBUF_INIT;
      +
-     +static void push_dates(struct child_process *child)
-    @@ -160,11 +149,13 @@
-     -		else
-     +		else {
-     +			if (opts->ignore_date) {
-    ++				char *new_author = ignore_author_date(author);
-     +				if (!author)
-     +					BUG("ignore-date can only be used with "
-     +					    "rebase, which must set the author "
-     +					    "before committing the tree");
-    -+				ignore_author_date(&author);
-    ++				free((void *)author);
-    ++				author = new_author;
-     +			}
-      			res = commit_tree(msg.buf, msg.len, cache_tree_oid,
-      					  NULL, &root_commit, author,
-    @@ -187,7 +178,7 @@
-      	reset_ident_date();
+     +	strbuf_addf(&date, "@%"PRIuMAX, (uintmax_t)now);
+    -+	argv_array_pushf(&child->args, "--date=%s", date.buf);
+    ++	argv_array_pushf(&child->env_array, "GIT_AUTHOR_DATE=%s", date.buf);
+     +	argv_array_pushf(&child->env_array, "GIT_COMMITTER_DATE=%s", date.buf);
+     +	strbuf_release(&date);
+     +}
+    @@ -143,28 +148,6 @@
+      N_("you have staged changes in your working tree\n"
+      "If these changes are meant to be squashed into the previous commit, run:\n"
+     @@
+    - 
+    - 		if (res <= 0)
+    - 			res = error_errno(_("could not read '%s'"), defmsg);
+    --		else
+    -+		else {
+    -+			if (opts->ignore_date) {
+    -+				char *new_author = ignore_author_date(author);
+    -+				if (!author)
+    -+					BUG("ignore-date can only be used with "
+    -+					    "rebase, which must set the author "
+    -+					    "before committing the tree");
+    -+				free((void *)author);
+    -+				author = new_author;
+    -+			}
+    - 			res = commit_tree(msg.buf, msg.len, cache_tree_oid,
+    - 					  NULL, &root_commit, author,
+    - 					  opts->gpg_sign);
+    -+		}
+    - 
+    - 		strbuf_release(&msg);
+    - 		strbuf_release(&script);
+    -@@
+      		argv_array_push(&cmd.args, "--amend");
+      	if (opts->gpg_sign)
+      		argv_array_pushf(&cmd.args, "-S%s", opts->gpg_sign);
+    @@ -179,6 +162,10 @@
       
      +	if (opts->ignore_date) {
-    -+		ignore_author_date(&author);
-    ++		author = ignore_author_date(author);
+     +		author = ignore_author_date(author);
+    ++		if (!author) {
+    ++			res = -1;
+    ++			goto out;
+    ++		}
      +		free(author_to_free);
      +		author_to_free = (char *)author;
      +	}
-6:  cb81e6c4e5 ! 6:  210d15cca0 rebase: add --author-date-is-committer-date
-    @@ -1,6 +1,6 @@
-     Author: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
-     
-    -    rebase: add --author-date-is-committer-date
-    +    rebase: add --reset-author-date
-     
-         The previous commit introduced --ignore-date flag to interactive
-         rebase, but the name is actually very vague in context of rebase -i
-    @@ -16,9 +16,9 @@
-      	as the committer date. This implies --force-rebase.
+    @@ -242,7 +229,7 @@
+      --- a/t/t3433-rebase-options-compatibility.sh
+      +++ b/t/t3433-rebase-options-compatibility.sh
+     @@
+    - 	test_cmp authortime committertime
+    + 	done <rev_list
+      '
       
-      --ignore-date::
-    -+--author-date-is-committer-date::
-    - 	Instead of using the given author date, re-set it to the value
-    - 	same as committer (current) date. This implies --force-rebase.
-    ++--reset-author-date::
-    + 	Instead of using the given author date, reset it to the value
-    + 	same as the current time. This implies --force-rebase.
-      +
-     
-      diff --git a/builtin/rebase.c b/builtin/rebase.c
-    @@ -28,7 +28,7 @@
-      		OPT_BOOL(0, "committer-date-is-author-date",
-      			 &options.committer_date_is_author_date,
-      			 N_("make committer date match author date")),
-    -+		OPT_BOOL(0, "author-date-is-committer-date", &options.ignore_date,
-    ++		OPT_BOOL(0, "reset-author-date", &options.ignore_date,
-     +			 "ignore author date and use current date"),
-      		OPT_BOOL(0, "ignore-date", &options.ignore_date,
-      			 "ignore author date and use current date"),
+     +# Checking for +0000 in author time is enough since default
+    @@ -252,13 +239,32 @@
+     +	git commit --amend --date="$GIT_AUTHOR_DATE" &&
+     +	git rebase --ignore-date HEAD^ &&
+     +	git show HEAD --pretty="format:%ai" >authortime &&
+    -+	grep "+0000" authortime
+    ++	git show HEAD --pretty="format:%ci" >committertime &&
+    ++	grep "+0000" authortime &&
+    ++	grep "+0000" committertime
+     +'
+     +
+     +test_expect_success '--ignore-date works with interactive backend' '
+     +	git commit --amend --date="$GIT_AUTHOR_DATE" &&
+     +	git rebase --ignore-date -i HEAD^ &&
+     +	git show HEAD --pretty="format:%ai" >authortime &&
+    -+	grep "+0000" authortime
+    ++	git show HEAD --pretty="format:%ci" >committertime &&
+    ++	grep "+0000" authortime &&
+    ++	grep "+0000" committertime
+     +'
+    ++
+    ++test_expect_success '--ignore-date works with rebase -r' '
+    ++	git checkout side &&
+    ++	git merge commit3 &&
+    ++	git rebase -r --root --ignore-date &&
+    ++	git rev-list HEAD >rev_list &&
+    ++	while read HASH
+    ++	do
+    ++		git show $HASH --pretty="format:%ai" >authortime
+    ++		git show $HASH --pretty="format:%ci" >committertime
+    ++		grep "+0000" authortime
+    ++		grep "+0000" committertime
+    ++	done <rev_list
+    ++'
+    ++
+      test_done
+ 6:  210d15cca0 = 54:  396d5f16eb rebase: add --reset-author-date
 -- 
 2.21.0
 

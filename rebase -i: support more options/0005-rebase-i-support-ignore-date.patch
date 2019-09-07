@@ -1,7 +1,7 @@
-From a69749dd6748ee5fbdd2c57bf06aa0ec88c0dbce Mon Sep 17 00:00:00 2001
+From fc68e55e78dd2be2283c48635230b7c4e5078621 Mon Sep 17 00:00:00 2001
 From: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
 Date: Mon, 5 Aug 2019 04:31:12 +0530
-Subject: [PATCH v3 5/6] rebase -i: support --ignore-date
+Subject: [PATCH v4 5/6] rebase -i: support --ignore-date
 
 rebase am already has this flag to "lie" about the author date
 by changing it to the committer (current) date. Let's add the same
@@ -10,11 +10,11 @@ for interactive machinery.
 Signed-off-by: Rohit Ashiwal <rohit.ashiwal265@gmail.com>
 ---
  Documentation/git-rebase.txt            |  6 +--
- builtin/rebase.c                        | 16 ++++---
- sequencer.c                             | 58 ++++++++++++++++++++++++-
+ builtin/rebase.c                        | 18 ++++++---
+ sequencer.c                             | 53 ++++++++++++++++++++++++-
  sequencer.h                             |  1 +
- t/t3433-rebase-options-compatibility.sh | 16 +++++++
- 5 files changed, 87 insertions(+), 10 deletions(-)
+ t/t3433-rebase-options-compatibility.sh | 35 ++++++++++++++++
+ 5 files changed, 104 insertions(+), 9 deletions(-)
 
 diff --git a/Documentation/git-rebase.txt b/Documentation/git-rebase.txt
 index e7c0eac18c..e7ac9fae0b 100644
@@ -48,7 +48,7 @@ index e7c0eac18c..e7ac9fae0b 100644
   * --rebase-merges and --strategy
   * --rebase-merges and --strategy-option
 diff --git a/builtin/rebase.c b/builtin/rebase.c
-index 656bc7d7e9..a63531ee90 100644
+index 656bc7d7e9..e6f90f61dd 100644
 --- a/builtin/rebase.c
 +++ b/builtin/rebase.c
 @@ -83,6 +83,7 @@ struct rebase_options {
@@ -87,13 +87,15 @@ index 656bc7d7e9..a63531ee90 100644
  		OPT_PASSTHRU_ARGV('C', NULL, &options.git_am_opts, N_("n"),
  				  N_("passed to 'git apply'"), 0),
  		OPT_BOOL(0, "ignore-whitespace", &options.ignore_whitespace,
-@@ -1697,13 +1701,15 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)
+@@ -1697,13 +1701,17 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)
  		    state_dir_base, cmd_live_rebase, buf.buf);
  	}
  
 -	if (options.committer_date_is_author_date)
-+	if (options.ignore_date)
++	if (options.ignore_date) {
 +		options.committer_date_is_author_date = 0;
++		setenv("GIT_COMMITTER_DATE", "", 1);
++	}
 +	if (options.committer_date_is_author_date ||
 +	    options.ignore_date)
  		options.flags |= REBASE_FORCE;
@@ -107,7 +109,7 @@ index 656bc7d7e9..a63531ee90 100644
  			options.flags |= REBASE_FORCE;
  		else if (skip_prefix(option, "-C", &p)) {
 diff --git a/sequencer.c b/sequencer.c
-index 8f7b984333..f5a9590844 100644
+index 0d78abeec8..188499190f 100644
 --- a/sequencer.c
 +++ b/sequencer.c
 @@ -148,6 +148,7 @@ static GIT_PATH_FUNC(rebase_path_refs_to_delete, "rebase-merge/refs-to-delete")
@@ -118,8 +120,8 @@ index 8f7b984333..f5a9590844 100644
  static GIT_PATH_FUNC(rebase_path_orig_head, "rebase-merge/orig-head")
  static GIT_PATH_FUNC(rebase_path_verbose, "rebase-merge/verbose")
  static GIT_PATH_FUNC(rebase_path_quiet, "rebase-merge/quiet")
-@@ -919,6 +920,32 @@ static const char *read_author_ident(struct strbuf *buf)
- 	return buf->buf;
+@@ -891,6 +892,35 @@ static char *read_author_date_or_null(void)
+ 	return date;
  }
  
 +/* Construct a free()able author string with current time as the author date */
@@ -129,7 +131,10 @@ index 8f7b984333..f5a9590844 100644
 +	struct ident_split ident;
 +	struct strbuf new_author = STRBUF_INIT;
 +
-+	split_ident_line(&ident, author, len);
++	if (split_ident_line(&ident, author, len) < 0) {
++		error(_("malformed ident line"));
++		return NULL;
++	}
 +	len = ident.mail_end - ident.name_begin + 1;
 +
 +	strbuf_addf(&new_author, "%.*s ", len, author);
@@ -143,7 +148,7 @@ index 8f7b984333..f5a9590844 100644
 +	struct strbuf date = STRBUF_INIT;
 +
 +	strbuf_addf(&date, "@%"PRIuMAX, (uintmax_t)now);
-+	argv_array_pushf(&child->args, "--date=%s", date.buf);
++	argv_array_pushf(&child->env_array, "GIT_AUTHOR_DATE=%s", date.buf);
 +	argv_array_pushf(&child->env_array, "GIT_COMMITTER_DATE=%s", date.buf);
 +	strbuf_release(&date);
 +}
@@ -151,29 +156,7 @@ index 8f7b984333..f5a9590844 100644
  static const char staged_changes_advice[] =
  N_("you have staged changes in your working tree\n"
  "If these changes are meant to be squashed into the previous commit, run:\n"
-@@ -1020,10 +1047,20 @@ static int run_git_commit(struct repository *r,
- 
- 		if (res <= 0)
- 			res = error_errno(_("could not read '%s'"), defmsg);
--		else
-+		else {
-+			if (opts->ignore_date) {
-+				char *new_author = ignore_author_date(author);
-+				if (!author)
-+					BUG("ignore-date can only be used with "
-+					    "rebase, which must set the author "
-+					    "before committing the tree");
-+				free((void *)author);
-+				author = new_author;
-+			}
- 			res = commit_tree(msg.buf, msg.len, cache_tree_oid,
- 					  NULL, &root_commit, author,
- 					  opts->gpg_sign);
-+		}
- 
- 		strbuf_release(&msg);
- 		strbuf_release(&script);
-@@ -1053,6 +1090,8 @@ static int run_git_commit(struct repository *r,
+@@ -983,6 +1013,8 @@ static int run_git_commit(struct repository *r,
  		argv_array_push(&cmd.args, "--amend");
  	if (opts->gpg_sign)
  		argv_array_pushf(&cmd.args, "-S%s", opts->gpg_sign);
@@ -182,19 +165,23 @@ index 8f7b984333..f5a9590844 100644
  	if (defmsg)
  		argv_array_pushl(&cmd.args, "-F", defmsg, NULL);
  	else if (!(flags & EDIT_MSG))
-@@ -1515,6 +1554,11 @@ static int try_to_commit(struct repository *r,
+@@ -1451,6 +1483,15 @@ static int try_to_commit(struct repository *r,
  
  	reset_ident_date();
  
 +	if (opts->ignore_date) {
 +		author = ignore_author_date(author);
++		if (!author) {
++			res = -1;
++			goto out;
++		}
 +		free(author_to_free);
 +		author_to_free = (char *)author;
 +	}
  	if (commit_tree_extended(msg->buf, msg->len, &tree, parents,
  				 oid, author, opts->gpg_sign, extra)) {
  		res = error(_("failed to write commit object"));
-@@ -2592,6 +2636,11 @@ static int read_populate_opts(struct replay_opts *opts)
+@@ -2527,6 +2568,11 @@ static int read_populate_opts(struct replay_opts *opts)
  			opts->committer_date_is_author_date = 1;
  		}
  
@@ -206,7 +193,7 @@ index 8f7b984333..f5a9590844 100644
  		if (file_exists(rebase_path_reschedule_failed_exec()))
  			opts->reschedule_failed_exec = 1;
  
-@@ -2676,6 +2725,8 @@ int write_basic_state(struct replay_opts *opts, const char *head_name,
+@@ -2611,6 +2657,8 @@ int write_basic_state(struct replay_opts *opts, const char *head_name,
  		write_file(rebase_path_signoff(), "--signoff\n");
  	if (opts->committer_date_is_author_date)
  		write_file(rebase_path_cdate_is_adate(), "%s", "");
@@ -215,7 +202,7 @@ index 8f7b984333..f5a9590844 100644
  	if (opts->reschedule_failed_exec)
  		write_file(rebase_path_reschedule_failed_exec(), "%s", "");
  
-@@ -3601,6 +3652,8 @@ static int do_merge(struct repository *r,
+@@ -3536,6 +3584,8 @@ static int do_merge(struct repository *r,
  		argv_array_push(&cmd.args, git_path_merge_msg(r));
  		if (opts->gpg_sign)
  			argv_array_push(&cmd.args, opts->gpg_sign);
@@ -224,7 +211,7 @@ index 8f7b984333..f5a9590844 100644
  
  		/* Add the tips to be merged */
  		for (j = to_merge; j; j = j->next)
-@@ -3874,7 +3927,8 @@ static int pick_commits(struct repository *r,
+@@ -3809,7 +3859,8 @@ static int pick_commits(struct repository *r,
  	if (opts->allow_ff)
  		assert(!(opts->signoff || opts->no_commit ||
  				opts->record_origin || opts->edit ||
@@ -247,11 +234,11 @@ index e3881e9275..bf5a79afdb 100644
  	int mainline;
  
 diff --git a/t/t3433-rebase-options-compatibility.sh b/t/t3433-rebase-options-compatibility.sh
-index b2419a2b75..c060fcd10b 100755
+index 6c1fbab4d8..0ad7bfc6a0 100755
 --- a/t/t3433-rebase-options-compatibility.sh
 +++ b/t/t3433-rebase-options-compatibility.sh
-@@ -81,4 +81,20 @@ test_expect_success '--committer-date-is-author-date works with interactive back
- 	test_cmp authortime committertime
+@@ -99,4 +99,39 @@ test_expect_success '--committer-date-is-author-date works with rebase -r' '
+ 	done <rev_list
  '
  
 +# Checking for +0000 in author time is enough since default
@@ -261,15 +248,34 @@ index b2419a2b75..c060fcd10b 100755
 +	git commit --amend --date="$GIT_AUTHOR_DATE" &&
 +	git rebase --ignore-date HEAD^ &&
 +	git show HEAD --pretty="format:%ai" >authortime &&
-+	grep "+0000" authortime
++	git show HEAD --pretty="format:%ci" >committertime &&
++	grep "+0000" authortime &&
++	grep "+0000" committertime
 +'
 +
 +test_expect_success '--ignore-date works with interactive backend' '
 +	git commit --amend --date="$GIT_AUTHOR_DATE" &&
 +	git rebase --ignore-date -i HEAD^ &&
 +	git show HEAD --pretty="format:%ai" >authortime &&
-+	grep "+0000" authortime
++	git show HEAD --pretty="format:%ci" >committertime &&
++	grep "+0000" authortime &&
++	grep "+0000" committertime
 +'
++
++test_expect_success '--ignore-date works with rebase -r' '
++	git checkout side &&
++	git merge commit3 &&
++	git rebase -r --root --ignore-date &&
++	git rev-list HEAD >rev_list &&
++	while read HASH
++	do
++		git show $HASH --pretty="format:%ai" >authortime
++		git show $HASH --pretty="format:%ci" >committertime
++		grep "+0000" authortime
++		grep "+0000" committertime
++	done <rev_list
++'
++
  test_done
 -- 
 2.21.0
